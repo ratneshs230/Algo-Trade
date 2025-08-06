@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorithmic Trading Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-chart-line"></i>
+                    <h1>Algo Trading Dashboard</h1>
+                </div>
+                <div class="header-status">
+                    <div class="status-item">
+                        <i class="fas fa-circle" id="connection-status"></i>
+                        <span id="connection-text">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Sidebar -->
+            <aside class="dashboard-sidebar">
+                <nav class="sidebar-nav">
+                    <ul>
+                        <li class="nav-item active">
+                            <a href="#kite-login" class="nav-link" data-section="kite-login">
+                                <i class="fas fa-key"></i>
+                                <span>Kite Login</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#trading-bot" class="nav-link" data-section="trading-bot">
+                                <i class="fas fa-robot"></i>
+                                <span>Trading Bot</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#live-ratings" class="nav-link" data-section="live-ratings">
+                                <i class="fas fa-star"></i>
+                                <span>Live Ratings</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#portfolio" class="nav-link" data-section="portfolio">
+                                <i class="fas fa-wallet"></i>
+                                <span>Portfolio</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#settings" class="nav-link" data-section="settings">
+                                <i class="fas fa-cog"></i>
+                                <span>Settings</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <div class="dashboard-content">
+                <!-- Kite Login Section -->
+                <section id="kite-login" class="content-section active">
+                    <div class="section-header">
+                        <h2><i class="fas fa-key"></i> Kite Connect Authentication</h2>
+                        <p>Manage your Kite Connect access token for trading operations</p>
+                    </div>
+
+                    <!-- Configuration Status -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-shield-alt"></i> Configuration Status</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="config-status">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <span>Checking configuration...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current Token Info -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-info-circle"></i> Current Access Token</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="token-info">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <span>Loading token information...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Login Process -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-sign-in-alt"></i> Generate New Access Token</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="login-section">
+                                <!-- Start Login Button -->
+                                <div id="login-start-section">
+                                    <button id="start-login-btn" class="btn btn-primary">
+                                        <i class="fas fa-play"></i>
+                                        Start Kite Login Process
+                                    </button>
+                                    <p class="help-text">
+                                        This will open a browser window to perform automated login to Kite Connect.
+                                        You'll need to provide your TOTP code when prompted.
+                                    </p>
+                                </div>
+
+                                <!-- TOTP Input Section -->
+                                <div id="totp-section" class="hidden">
+                                    <div class="totp-input-group">
+                                        <label for="totp-input">Enter 6-digit TOTP Code:</label>
+                                        <div class="input-group">
+                                            <input type="text" id="totp-input" class="form-control" 
+                                                   placeholder="123456" maxlength="6" pattern="[0-9]{6}">
+                                            <button id="submit-totp-btn" class="btn btn-success">
+                                                <i class="fas fa-check"></i>
+                                                Submit
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p class="help-text">
+                                        Open your authenticator app and enter the 6-digit code for Kite Connect.
+                                    </p>
+                                </div>
+
+                                <!-- Status Display -->
+                                <div id="login-status" class="status-display">
+                                    <div class="status-message">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span id="status-text">Ready to start login process</span>
+                                    </div>
+                                    <div id="status-progress" class="progress-bar hidden">
+                                        <div class="progress-fill"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Trading Bot Section (Placeholder) -->
+                <section id="trading-bot" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-robot"></i> Automated Trading Bot</h2>
+                        <p>Control and monitor your automated trading bot</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="coming-soon">
+                                <i class="fas fa-tools"></i>
+                                <h3>Coming Soon</h3>
+                                <p>Trading bot controls will be available in the next update.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Live Ratings Section -->
+                <section id="live-ratings" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-star"></i> Live Stock Ratings</h2>
+                        <p>Real-time stock analysis and ratings updated continuously</p>
+                    </div>
+
+                    <!-- Ratings Summary -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-pie"></i> Ratings Summary</h3>
+                            <button id="refresh-ratings-btn" class="btn btn-primary btn-small">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="ratings-summary">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <span>Loading ratings summary...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stock Panels Container -->
+                    <div class="stocks-panels-container">
+                        <!-- Top 10 Stocks Panel -->
+                        <div class="stock-panel top-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-arrow-up"></i> Top 10 Performing Stocks</h3>
+                                <div class="panel-stats">
+                                    <span class="stats-badge positive" id="top-avg-score">--</span>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div id="top-10-ratings">
+                                    <div class="loading">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span>Loading top performers...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bottom 10 Stocks Panel -->
+                        <div class="stock-panel bottom-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-arrow-down"></i> Bottom 10 Performing Stocks</h3>
+                                <div class="panel-stats">
+                                    <span class="stats-badge negative" id="bottom-avg-score">--</span>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div id="bottom-10-ratings">
+                                    <div class="loading">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span>Loading bottom performers...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stock Detail Modal/Dropdown -->
+                    <div id="stock-detail-overlay" class="stock-detail-overlay hidden">
+                        <div class="stock-detail-content">
+                            <div class="detail-header">
+                                <h3 id="detail-stock-symbol">Stock Details</h3>
+                                <button id="close-detail-btn" class="close-btn">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="detail-body">
+                                <div class="detail-tabs">
+                                    <button class="tab-btn active" data-tab="overview">Overview</button>
+                                    <button class="tab-btn" data-tab="breakdown">Rating Breakdown</button>
+                                </div>
+                                
+                                <div class="tab-content">
+                                    <!-- Overview Tab -->
+                                    <div id="overview-tab" class="tab-panel active">
+                                        <div id="stock-overview"></div>
+                                    </div>
+                                    
+                                    <!-- Rating Breakdown Tab -->
+                                    <div id="breakdown-tab" class="tab-panel">
+                                        <div id="rating-breakdown"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Portfolio Section (Placeholder) -->
+                <section id="portfolio" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-wallet"></i> Portfolio Overview</h2>
+                        <p>Your holdings and trading performance</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="coming-soon">
+                                <i class="fas fa-briefcase"></i>
+                                <h3>Coming Soon</h3>
+                                <p>Portfolio overview will be available in the next update.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings Section (Placeholder) -->
+                <section id="settings" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-cog"></i> Settings</h2>
+                        <p>Configure your trading preferences</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="coming-soon">
+                                <i class="fas fa-sliders-h"></i>
+                                <h3>Coming Soon</h3>
+                                <p>Settings panel will be available in the next update.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

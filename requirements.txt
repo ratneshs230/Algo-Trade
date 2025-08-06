@@ -1,0 +1,30 @@
+# Core dependencies
+flask==2.3.3
+requests==2.31.0
+pandas==2.0.3
+numpy==1.24.3
+python-dotenv==1.0.0
+
+# Zerodha Kite API
+kiteconnect==4.0.1
+
+# Technical analysis
+TA-Lib==0.4.25
+
+# Date and time handling
+pytz==2023.3
+
+# Web server for dashboard
+gunicorn==21.2.0
+
+# Additional utilities
+schedule==1.2.0
+websocket-client==1.6.1
+
+# Selenium for automated login
+selenium==4.11.2
+
+# Development dependencies (optional)
+pytest==7.4.0
+black==23.7.0
+flake8==6.0.0
