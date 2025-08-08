@@ -28,6 +28,7 @@ from kiteConnect import KiteTrader, Config, KiteLoginAutomation
 from watchlist import get_watchlist
 from rating_system import StockRatingSystem
 from live_rating_system import LiveRatingSystem
+from precision_single_trade_strategy import PrecisionSingleTradeStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,24 @@ class WebSocketManager:
                     'tick_data': tick
                 })
                 
+                # NEW: Handle precision strategy active trade updates
+                if (self.enable_precision_strategy and 
+                    self.precision_strategy and 
+                    hasattr(self.precision_strategy, 'active_trade') and
+                    self.precision_strategy.active_trade):
+                    
+                    active_symbol = self.precision_strategy.active_trade.setup.candidate.symbol
+                    active_token = str(self.precision_strategy.active_trade.setup.candidate.instrument_token)
+                    
+                    if instrument_token == active_token:
+                        try:
+                            # Update active trade with real-time tick data
+                            trade_still_active = self.precision_strategy.update_active_trade(tick)
+                            if not trade_still_active:
+                                logger.info(f"Trade closed for {active_symbol}")
+                        except Exception as e:
+                            logger.error(f"Error updating precision strategy trade: {str(e)}")
+                
                 # Call specific handler if registered
                 if instrument_token in self.tick_handlers:
                     try:
@@ -304,15 +323,19 @@ class StockUniverseVersion:
 class AutomatedTradingBot:
     """Main automated trading bot controller"""
     
-    def __init__(self, config: BotConfig = None):
+    def __init__(self, config: BotConfig = None, enable_precision_strategy: bool = False):
         self.config = config or BotConfig()
         self.running = False
+        self.enable_precision_strategy = enable_precision_strategy
         
         # Core components
         self.access_token = None
         self.kite_trader = None
         self.websocket_manager = None
         self.stock_rating_system = None
+        
+        # NEW: Precision Single Trade Strategy
+        self.precision_strategy = None
         
         # Data management
         self.instruments = []
@@ -342,6 +365,10 @@ class AutomatedTradingBot:
         signal.signal(signal.SIGTERM, self._signal_handler)
         
         logger.info("Automated Trading Bot initialized with versioned stock universe")
+        if enable_precision_strategy:
+            logger.info("Precision Single Trade Strategy: ENABLED")
+        else:
+            logger.info("Precision Single Trade Strategy: DISABLED (Analysis mode only)")
     
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals"""
@@ -428,6 +455,46 @@ class AutomatedTradingBot:
             
         except Exception as e:
             logger.error(f"Error initializing components: {str(e)}")
+            return False
+    
+    def initialize_precision_strategy(self) -> bool:
+        """Initialize Precision Single Trade Strategy"""
+        try:
+            if not self.enable_precision_strategy:
+                logger.info("Precision strategy disabled - skipping initialization")
+                return True
+            
+            if not self.kite_trader or not self.instruments:
+                logger.error("Cannot initialize precision strategy - missing dependencies")
+                return False
+            
+            # Load instrument data with tick sizes
+            instruments_file = 'instruments/nse_instruments_watchlist.json'
+            if not os.path.exists(instruments_file):
+                logger.error(f"Instruments file not found: {instruments_file}")
+                return False
+            
+            with open(instruments_file, 'r') as f:
+                instruments_data = json.load(f)
+            
+            # Initialize precision strategy
+            self.precision_strategy = PrecisionSingleTradeStrategy(
+                kite_trader=self.kite_trader,
+                instruments=self.instruments,
+                instruments_data=instruments_data,
+                margin_percentage=0.95  # Use 95% of available margin
+            )
+            
+            logger.info("✅ Precision Single Trade Strategy initialized")
+            logger.info(f"   - Loaded {len(instruments_data)} instrument definitions")
+            logger.info(f"   - Ready to trade {len(self.instruments)} watchlist stocks")
+            logger.info(f"   - Single position control: ACTIVE")
+            logger.info(f"   - Margin allocation: 95%")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error initializing precision strategy: {str(e)}")
             return False
     
     def fetch_instruments_and_watchlist(self) -> bool:
@@ -1055,7 +1122,12 @@ class AutomatedTradingBot:
                 logger.error("Failed to initialize live rating systems")
                 return False
             
-            # 8. Start background threads
+            # 8. Initialize Precision Single Trade Strategy
+            if not self.initialize_precision_strategy():
+                logger.error("Failed to initialize precision strategy")
+                return False
+            
+            # 9. Start background threads
             self.running = True
             
             # Start periodic refresh thread
@@ -1072,10 +1144,28 @@ class AutomatedTradingBot:
             )
             save_thread.start()
             
+            # Start precision strategy thread if enabled
+            if self.enable_precision_strategy and self.precision_strategy:
+                precision_thread = threading.Thread(
+                    target=self.run_precision_strategy_loop,
+                    daemon=True
+                )
+                precision_thread.start()
+                logger.info("🎯 Precision Single Trade Strategy thread started")
+            
             logger.info("✅ AUTOMATED TRADING BOT STARTED SUCCESSFULLY")
             logger.info(f"📊 Monitoring {len(self.top_20_stocks)} stocks (top 10 + bottom 10) with live ratings")
             logger.info(f"🔄 Refreshing data every {self.config.refresh_interval_minutes} minutes")
             logger.info("📡 WebSocket streaming active for real-time data")
+            
+            if self.enable_precision_strategy:
+                logger.info("🚀 PRECISION SINGLE TRADE STRATEGY: ACTIVE")
+                logger.info("   - Only ONE position at a time")
+                logger.info("   - Full margin allocation")
+                logger.info("   - 3-phase trade management")
+                logger.info("   - Fibonacci trailing stops")
+            else:
+                logger.info("📈 ANALYSIS MODE ONLY - No live trading")
             
             return True
             

@@ -339,6 +339,225 @@ class IndicatorCalculator:
         else:
             return 0.0  # Divergence
     
+    def calculate_supertrend(self, high: List[float], low: List[float], close: List[float], 
+                           period: int = 14, factor: float = 3.0) -> List[float]:
+        """Calculate Supertrend indicator"""
+        if len(high) < period:
+            return [np.nan] * len(high)
+        
+        # Calculate ATR
+        atr = self.calculate_atr(high, low, close, period)
+        
+        supertrend = [np.nan] * len(high)
+        trend = [1] * len(high)  # 1 for uptrend, -1 for downtrend
+        
+        for i in range(period, len(high)):
+            if np.isnan(atr[i]):
+                continue
+                
+            # Calculate basic bands
+            hl2 = (high[i] + low[i]) / 2
+            basic_upper_band = hl2 + (factor * atr[i])
+            basic_lower_band = hl2 - (factor * atr[i])
+            
+            # Calculate final bands
+            if i == period:
+                final_upper_band = basic_upper_band
+                final_lower_band = basic_lower_band
+            else:
+                # Upper band
+                final_upper_band = (basic_upper_band < supertrend[i-1]) or (close[i-1] > supertrend[i-1]) \
+                                 if not np.isnan(supertrend[i-1]) else basic_upper_band
+                if not final_upper_band:
+                    final_upper_band = basic_upper_band
+                else:
+                    final_upper_band = supertrend[i-1] if not np.isnan(supertrend[i-1]) else basic_upper_band
+                
+                # Lower band  
+                final_lower_band = (basic_lower_band > supertrend[i-1]) or (close[i-1] < supertrend[i-1]) \
+                                 if not np.isnan(supertrend[i-1]) else basic_lower_band
+                if not final_lower_band:
+                    final_lower_band = basic_lower_band
+                else:
+                    final_lower_band = supertrend[i-1] if not np.isnan(supertrend[i-1]) else basic_lower_band
+            
+            # Determine trend and supertrend value
+            if i == period:
+                trend[i] = 1 if close[i] <= final_upper_band else -1
+            else:
+                if trend[i-1] == 1 and close[i] <= final_lower_band:
+                    trend[i] = -1
+                elif trend[i-1] == -1 and close[i] >= final_upper_band:
+                    trend[i] = 1
+                else:
+                    trend[i] = trend[i-1]
+            
+            supertrend[i] = final_lower_band if trend[i] == 1 else final_upper_band
+        
+        return supertrend
+    
+    def calculate_parabolic_sar(self, high: List[float], low: List[float], close: List[float], 
+                               initial_af: float = 0.02, max_af: float = 0.2) -> List[float]:
+        """Calculate Parabolic SAR indicator"""
+        if len(high) < 2:
+            return [np.nan] * len(high)
+        
+        psar = [np.nan] * len(high)
+        trend = [1] * len(high)  # 1 for uptrend, -1 for downtrend
+        af = [initial_af] * len(high)
+        ep = [0.0] * len(high)  # Extreme Point
+        
+        # Initialize first values
+        psar[0] = low[0]
+        trend[0] = 1
+        ep[0] = high[0]
+        
+        for i in range(1, len(high)):
+            # Calculate PSAR
+            psar[i] = psar[i-1] + af[i-1] * (ep[i-1] - psar[i-1])
+            
+            # Check for trend reversal
+            if trend[i-1] == 1:  # Uptrend
+                if low[i] <= psar[i]:
+                    # Trend reversal to downtrend
+                    trend[i] = -1
+                    psar[i] = ep[i-1]  # EP becomes new PSAR
+                    ep[i] = low[i]     # New EP is current low
+                    af[i] = initial_af # Reset AF
+                else:
+                    # Continue uptrend
+                    trend[i] = 1
+                    if high[i] > ep[i-1]:
+                        ep[i] = high[i]  # New extreme point
+                        af[i] = min(af[i-1] + initial_af, max_af)  # Increase AF
+                    else:
+                        ep[i] = ep[i-1]
+                        af[i] = af[i-1]
+                    
+                    # Ensure PSAR doesn't exceed recent lows
+                    psar[i] = min(psar[i], min(low[i-1:i+1]))
+            
+            else:  # Downtrend
+                if high[i] >= psar[i]:
+                    # Trend reversal to uptrend
+                    trend[i] = 1
+                    psar[i] = ep[i-1]  # EP becomes new PSAR
+                    ep[i] = high[i]    # New EP is current high
+                    af[i] = initial_af # Reset AF
+                else:
+                    # Continue downtrend
+                    trend[i] = -1
+                    if low[i] < ep[i-1]:
+                        ep[i] = low[i]   # New extreme point
+                        af[i] = min(af[i-1] + initial_af, max_af)  # Increase AF
+                    else:
+                        ep[i] = ep[i-1]
+                        af[i] = af[i-1]
+                    
+                    # Ensure PSAR doesn't fall below recent highs
+                    psar[i] = max(psar[i], max(high[i-1:i+1]))
+        
+        return psar
+    
+    def calculate_fibonacci_levels(self, high: List[float], low: List[float], 
+                                 lookback_periods: int = 50, direction: str = "auto") -> Dict[str, float]:
+        """Calculate Fibonacci retracement and extension levels"""
+        if len(high) < lookback_periods:
+            return {}
+        
+        # Get recent data
+        recent_high = high[-lookback_periods:]
+        recent_low = low[-lookback_periods:]
+        
+        swing_high = max(recent_high)
+        swing_low = min(recent_low)
+        range_size = abs(swing_high - swing_low)
+        
+        if range_size == 0:
+            return {}
+        
+        # Standard Fibonacci levels
+        fib_ratios = {
+            'level_0': 0.0,
+            'level_23.6': 0.236,
+            'level_38.2': 0.382,
+            'level_50.0': 0.5,
+            'level_61.8': 0.618,
+            'level_78.6': 0.786,
+            'level_100.0': 1.0,
+            'level_123.6': 1.236,
+            'level_161.8': 1.618,
+            'level_200.0': 2.0
+        }
+        
+        fib_levels = {}
+        
+        # Auto-detect direction based on recent price action
+        if direction == "auto":
+            recent_close = high[-1]  # Using high as proxy for close
+            if recent_close > (swing_high + swing_low) / 2:
+                direction = "uptrend"
+            else:
+                direction = "downtrend"
+        
+        # Calculate levels based on trend direction
+        for level_name, ratio in fib_ratios.items():
+            if direction == "uptrend":
+                # For uptrend: retracements go down from swing high
+                fib_levels[level_name] = swing_high - (ratio * range_size)
+            else:
+                # For downtrend: retracements go up from swing low
+                fib_levels[level_name] = swing_low + (ratio * range_size)
+        
+        # Add swing points for reference
+        fib_levels['swing_high'] = swing_high
+        fib_levels['swing_low'] = swing_low
+        fib_levels['range_size'] = range_size
+        fib_levels['direction'] = direction
+        
+        return fib_levels
+    
+    def get_supertrend_signal(self, high: List[float], low: List[float], close: List[float], 
+                             period: int = 5, factor: float = 3.0) -> str:
+        """Get Supertrend signal for strategy confirmation"""
+        if len(close) < period + 1:
+            return "NEUTRAL"
+        
+        supertrend = self.calculate_supertrend(high, low, close, period, factor)
+        
+        if len(supertrend) < 2 or np.isnan(supertrend[-1]):
+            return "NEUTRAL"
+        
+        current_price = close[-1]
+        current_supertrend = supertrend[-1]
+        
+        if current_price > current_supertrend:
+            return "BULLISH"
+        elif current_price < current_supertrend:
+            return "BEARISH"
+        else:
+            return "NEUTRAL"
+    
+    def get_psar_signal(self, high: List[float], low: List[float], close: List[float]) -> str:
+        """Get Parabolic SAR signal for strategy confirmation"""
+        if len(close) < 3:
+            return "NEUTRAL"
+        
+        psar = self.calculate_parabolic_sar(high, low, close)
+        
+        if len(psar) < 1 or np.isnan(psar[-1]):
+            return "NEUTRAL"
+        
+        current_price = close[-1]
+        current_psar = psar[-1]
+        
+        if current_price > current_psar:
+            return "BULLISH"
+        elif current_price < current_psar:
+            return "BEARISH"
+        else:
+            return "NEUTRAL"
+
     def calculate_all_indicators(self, ohlcv_data: Dict) -> Dict[str, float]:
         """Calculate all indicators and return scores"""
         high = ohlcv_data.get('high', [])
