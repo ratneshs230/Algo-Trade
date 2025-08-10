@@ -20,6 +20,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from kiteconnect import KiteConnect
+import pyotp
 
 # Configuration Module
 class Config:
@@ -30,12 +31,13 @@ class Config:
     API_SECRET = os.getenv('KITE_API_SECRET', '')
     USER_ID = os.getenv('KITE_USER_ID', '')
     PASSWORD = os.getenv('KITE_PASSWORD', '')
+    TOTP_SECRET_KEY = os.getenv('KITE_TOTP_SECRET_KEY', '')
     
     @classmethod
     def validate(cls):
         """Validate that all required configuration is present"""
         missing = []
-        for field in ['API_KEY', 'API_SECRET', 'USER_ID', 'PASSWORD']:
+        for field in ['API_KEY', 'API_SECRET', 'USER_ID', 'PASSWORD', 'TOTP_SECRET_KEY']:
             if not getattr(cls, field):
                 missing.append(field)
         
@@ -103,27 +105,47 @@ class KiteLoginAutomation:
         """Handle two-factor authentication"""
         try:
             # Wait for 2FA page to load
-            wait = WebDriverWait(self.driver, 10)
+            wait = WebDriverWait(self.driver, 15)
             
-            # Prompt user for TOTP
-            print("\n" + "="*50)
-            print("Two-Factor Authentication Required")
-            print("="*50)
-            totp_code = input("Please enter your 6-digit TOTP code: ").strip()
+            print("Waiting for 2FA page to load...")
             
-            # Validate TOTP format
-            if not totp_code.isdigit() or len(totp_code) != 6:
-                raise ValueError("Invalid TOTP code. Must be 6 digits.")
-            
-            # Enter TOTP (Kite reuses the userid field for TOTP)
+            # Wait for TOTP input field
             totp_field = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "input#userid"))
             )
+            
+            print("2FA field found, generating TOTP code...")
+            
+            # Generate TOTP code programmatically
+            totp = pyotp.TOTP(Config.TOTP_SECRET_KEY)
+            totp_code = totp.now()
+            
+            print(f"Generated TOTP code: {totp_code}")
+            print(f"Time remaining for this code: {30 - (int(time.time()) % 30)} seconds")
+            
+            # Clear field and enter TOTP code
             totp_field.clear()
+            time.sleep(0.5)  # Small delay
             totp_field.send_keys(totp_code)
             
-            # Wait a moment for automatic submission
-            time.sleep(2)
+            print("TOTP code entered, waiting for submission...")
+            
+            # Try to find and click submit button if available
+            try:
+                submit_button = wait.until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit'], .button-orange"))
+                )
+                submit_button.click()
+                print("Submit button clicked")
+            except:
+                # If no submit button, just wait for automatic submission
+                print("No submit button found, waiting for automatic submission...")
+                time.sleep(3)
+            
+            # Wait a bit longer to see if 2FA succeeds
+            time.sleep(5)
+            
+            print(f"Current URL after 2FA attempt: {self.driver.current_url}")
             
         except Exception as e:
             raise Exception(f"2FA authentication failed: {str(e)}")
@@ -132,25 +154,45 @@ class KiteLoginAutomation:
         """Capture request token from redirect URL"""
         try:
             # Wait for redirect after successful login
-            wait = WebDriverWait(self.driver, 30)
+            wait = WebDriverWait(self.driver, 45)  # Increased timeout
             
-            # Wait until URL contains success parameter
-            wait.until(lambda driver: "status=success" in driver.current_url)
+            print("Waiting for redirect after 2FA...")
+            
+            # Wait until URL contains success parameter or request_token
+            def check_redirect(driver):
+                current_url = driver.current_url
+                print(f"Current URL: {current_url}")
+                return "status=success" in current_url or "request_token=" in current_url
+            
+            wait.until(check_redirect)
+            
+            # Additional wait to ensure page is fully loaded
+            time.sleep(3)
             
             # Get current URL
             current_url = self.driver.current_url
+            print(f"Final redirect URL: {current_url}")
             
             # Parse URL to extract request_token
             parsed_url = urlparse(current_url)
             query_params = parse_qs(parsed_url.query)
             
             if 'request_token' not in query_params:
-                raise ValueError("Request token not found in redirect URL")
+                # Try to find request_token in URL fragment as well
+                if '#' in current_url and 'request_token=' in current_url:
+                    fragment_params = parse_qs(current_url.split('#')[1])
+                    if 'request_token' in fragment_params:
+                        request_token = fragment_params['request_token'][0]
+                        return request_token
+                
+                raise ValueError(f"Request token not found in redirect URL: {current_url}")
             
             request_token = query_params['request_token'][0]
+            print(f"Successfully captured request token: {request_token[:20]}...")
             return request_token
             
         except Exception as e:
+            print(f"Error details - Current URL: {self.driver.current_url if self.driver else 'No driver'}")
             raise Exception(f"Failed to capture request token: {str(e)}")
     
     def _generate_access_token(self, request_token):

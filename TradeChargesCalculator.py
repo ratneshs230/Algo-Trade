@@ -1,15 +1,33 @@
 import math
 
+# Centralized Configuration Dictionary for Zerodha Intraday Equity Charges
+# All rates are based on Zerodha's official charge sheet for Equity Intraday.
+# Source: https://zerodha.com/brokerage-calculator/
+CHARGE_CONFIG = {
+    "brokerage_rate": 0.0003,       # 0.03% or ₹20 whichever is lower (per order)
+    "brokerage_flat_fee": 20.0,     # Flat fee per order
+    "stt_rate": 0.00025,            # 0.025% on sell turnover (Equity Delivery is 0.1% on both)
+    "transaction_charge_nse_equity": 0.0000325, # 0.00325% on turnover (NSE Equity)
+    "gst_rate": 0.18,               # 18% on (Brokerage + Transaction Charges + SEBI Fees)
+    "sebi_turnover_fee": 10 / 1_00_00_000, # ₹10 per Crore on turnover
+    "stamp_duty_rate": 0.00003      # 0.003% on buy turnover (Equity Intraday)
+}
+
 class TradeChargesCalculator:
     """
-    Calculates all statutory and brokerage charges for an intraday equity trade.
-    The calculations are based on standard rates for Indian brokers like Zerodha.
+    Calculates total charges for a complete round-trip (Buy + Sell) intraday equity trade
+    based on Zerodha's official charge sheet.
     """
 
     def __init__(self, quantity: int, buy_price: float, sell_price: float):
-        if quantity <= 0 or buy_price <= 0 or sell_price <= 0:
-            raise ValueError("Quantity and prices must be positive values.")
-            
+        """
+        Initializes the calculator with trade details.
+        
+        Args:
+            quantity (int): Number of shares traded.
+            buy_price (float): Price at which shares were bought.
+            sell_price (float): Price at which shares were sold.
+        """
         self.quantity = quantity
         self.buy_price = buy_price
         self.sell_price = sell_price
@@ -18,58 +36,70 @@ class TradeChargesCalculator:
         self.sell_turnover = self.quantity * self.sell_price
         self.total_turnover = self.buy_turnover + self.sell_turnover
 
-    def brokerage(self) -> float:
-        """Calculates brokerage per leg (buy and sell). Capped at ₹20 per order."""
-        buy_brokerage = min(0.03 / 100 * self.buy_turnover, 20)
-        sell_brokerage = min(0.03 / 100 * self.sell_turnover, 20)
+    def _calculate_brokerage(self) -> float:
+        """
+        Calculates brokerage for both buy and sell legs.
+        Brokerage is min(0.03% of turnover, ₹20) per order.
+        """
+        buy_brokerage = min(self.buy_turnover * CHARGE_CONFIG["brokerage_rate"], CHARGE_CONFIG["brokerage_flat_fee"])
+        sell_brokerage = min(self.sell_turnover * CHARGE_CONFIG["brokerage_rate"], CHARGE_CONFIG["brokerage_flat_fee"])
         return buy_brokerage + sell_brokerage
         
-    def stt_ctt(self) -> float:
-        """Calculates STT, which is charged only on the sell side for intraday equity."""
-        # Rate is 0.025% on the sell-side turnover
-        return (0.025 / 100) * self.sell_turnover
+    def _calculate_stt(self) -> float:
+        """
+        Calculates Securities Transaction Tax (STT).
+        For intraday equity, STT is 0.025% on sell turnover.
+        """
+        return self.sell_turnover * CHARGE_CONFIG["stt_rate"]
         
-    def transaction_charges(self) -> float:
-        """Calculates exchange transaction charges (e.g., NSE charges)."""
-        # Rate is ~0.00325% on total turnover for NSE
-        return (0.00325 / 100) * self.total_turnover
+    def _calculate_transaction_charges(self) -> float:
+        """
+        Calculates exchange transaction charges (NSE Equity).
+        0.00325% on total turnover.
+        """
+        return self.total_turnover * CHARGE_CONFIG["transaction_charge_nse_equity"]
         
-    def sebi_charges(self) -> float:
-        """Calculates SEBI turnover fees."""
-        # Rate is ₹10 per crore (0.0001%) on total turnover
-        return (10 / 10**7) * self.total_turnover
+    def _calculate_sebi_fees(self) -> float:
+        """
+        Calculates SEBI turnover fees.
+        ₹10 per Crore on total turnover.
+        """
+        return self.total_turnover * CHARGE_CONFIG["sebi_turnover_fee"]
 
-    def stamp_charges(self) -> float:
-        """Calculates stamp duty, charged only on the buy side."""
-        # Rate is 0.003% on the buy-side turnover
-        return (0.003 / 100) * self.buy_turnover
+    def _calculate_stamp_duty(self) -> float:
+        """
+        Calculates stamp duty.
+        For intraday equity, 0.003% on buy turnover.
+        """
+        return self.buy_turnover * CHARGE_CONFIG["stamp_duty_rate"]
         
-    def gst(self) -> float:
-        """Calculates GST (18%) on brokerage and transaction charges."""
-        # GST is not applicable on STT, Stamp Duty, or SEBI charges
-        gst_base = self.brokerage() + self.transaction_charges()
-        return (18 / 100) * gst_base
+    def _calculate_gst(self, brokerage: float, transaction_charges: float, sebi_fees: float) -> float:
+        """
+        Calculates Goods and Services Tax (GST).
+        18% on (Brokerage + Transaction Charges + SEBI Fees).
+        """
+        gst_base = brokerage + transaction_charges + sebi_fees
+        return gst_base * CHARGE_CONFIG["gst_rate"]
 
-    def total_charges(self) -> float:
-        """Calculates the sum of all charges for the round trip."""
-        total = (
-            self.brokerage() +
-            self.stt_ctt() +
-            self.transaction_charges() +
-            self.sebi_charges() +
-            self.stamp_charges() +
-            self.gst()
+    def calculate(self) -> float:
+        """
+        Orchestrates the calculation of all charges for a round-trip trade
+        and returns the total cost.
+        """
+        brokerage = self._calculate_brokerage()
+        stt = self._calculate_stt()
+        transaction_charges = self._calculate_transaction_charges()
+        sebi_fees = self._calculate_sebi_fees()
+        stamp_duty = self._calculate_stamp_duty()
+        
+        gst = self._calculate_gst(brokerage, transaction_charges, sebi_fees)
+        
+        total_charges = (
+            brokerage +
+            stt +
+            transaction_charges +
+            sebi_fees +
+            stamp_duty +
+            gst
         )
-        return total
-
-    def get_charges_breakdown(self) -> dict:
-        """Returns a dictionary with a breakdown of all charges."""
-        return {
-            "brokerage": self.brokerage(),
-            "stt": self.stt_ctt(),
-            "transaction_charges": self.transaction_charges(),
-            "sebi_charges": self.sebi_charges(),
-            "stamp_charges": self.stamp_charges(),
-            "gst": self.gst(),
-            "total_charges": self.total_charges()
-        }
+        return total_charges

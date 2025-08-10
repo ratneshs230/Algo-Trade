@@ -227,47 +227,29 @@ class PrecisionSingleTradeStrategy:
             return None
     
     def get_1minute_ohlcv_data(self, symbol: str, periods: int = 100) -> Optional[Dict[str, List[float]]]:
-        """Get recent 1-minute OHLCV data for a symbol"""
+        """
+        Get recent 1-minute OHLCV data for a symbol from local files.
+        This method no longer makes API calls.
+        """
         try:
-            # Try to read from historical data files first
             data_file = f"historical_data/{symbol}/{symbol}_1minute.json"
             if os.path.exists(data_file):
                 with open(data_file, 'r') as f:
                     historical_data = json.load(f)
                 
-                if len(historical_data) >= periods:
+                if historical_data and len(historical_data) >= periods:
                     # Take the most recent data
                     recent_data = historical_data[-periods:]
                     return extract_ohlcv_from_historical_data(recent_data)
-            
-            # Fallback to API call if file not available
-            instrument_token = None
-            for inst in self.instruments:
-                if inst.get('tradingsymbol') == symbol:
-                    instrument_token = int(inst.get('instrument_token', 0))
-                    break
-            
-            if not instrument_token:
+                else:
+                    logger.warning(f"Insufficient 1-minute data in file for {symbol}: {len(historical_data) if historical_data else 0} candles")
+                    return None
+            else:
+                logger.warning(f"1-minute data file not found for {symbol}: {data_file}")
                 return None
             
-            to_date = datetime.now()
-            from_date = to_date - timedelta(days=2)  # Get last 2 days of 1-minute data
-            
-            historical_data = self.kite_trader.get_historical_data(
-                instrument_token=instrument_token,
-                from_date=from_date,
-                to_date=to_date,
-                interval='minute'
-            )
-            
-            if historical_data and len(historical_data) >= periods:
-                recent_data = historical_data[-periods:]
-                return extract_ohlcv_from_historical_data(recent_data)
-            
-            return None
-            
         except Exception as e:
-            logger.error(f"Error getting 1-minute data for {symbol}: {str(e)}")
+            logger.error(f"Error loading 1-minute data for {symbol} from local file: {str(e)}")
             return None
     
     def check_entry_confirmation(self, candidate: TradingCandidate) -> Optional[Tuple[TradeDirection, float, float]]:
@@ -405,7 +387,7 @@ class PrecisionSingleTradeStrategy:
     def calculate_breakeven_price(self, entry_price: float, symbol: str, 
                                 quantity: int, direction: TradeDirection) -> float:
         """
-        Calculate precise breakeven price by iteratively accounting for exit costs.
+        Calculate precise breakeven price including transaction costs and tick size
         
         Args:
             entry_price: Entry price
@@ -414,57 +396,42 @@ class PrecisionSingleTradeStrategy:
             direction: Trade direction
             
         Returns:
-            Breakeven price rounded to the nearest valid tick size.
+            Breakeven price rounded to next tick size
         """
         try:
-            logger.info(f"Calculating precise breakeven for {symbol}...")
-            logger.info(f"  Entry Price: ₹{entry_price:.2f}, Quantity: {quantity}")
-
-            # Initial guess for breakeven is just the entry price
-            breakeven_guess = entry_price
+            # Calculate charges using the dedicated calculator
+            # We assume the exit price is the same as entry for cost calculation
+            charges_calculator = TradeChargesCalculator(
+                quantity=quantity, 
+                buy_price=entry_price, 
+                sell_price=entry_price
+            )
+            transaction_costs = charges_calculator.total_charges()
             
-            # Iteratively refine the breakeven price
-            for i in range(10): # 10 iterations is more than enough for convergence
-                # Calculate total charges assuming we exit at our current guessed breakeven price
-                charges_calculator = TradeChargesCalculator(
-                    quantity=quantity, 
-                    buy_price=entry_price, 
-                    sell_price=breakeven_guess
-                )
-                total_costs = charges_calculator.total_charges()
-                cost_per_share = total_costs / quantity
-
-                # Calculate the new breakeven price based on these costs
-                if direction == TradeDirection.LONG:
-                    new_breakeven = entry_price + cost_per_share
-                else: # SHORT
-                    new_breakeven = entry_price - cost_per_share
-
-                # If the new breakeven price is very close to the last guess, we've converged
-                if abs(new_breakeven - breakeven_guess) < 0.0001:
-                    break
-                
-                breakeven_guess = new_breakeven
-
-            # Final rounding to the valid tick size
+            # Calculate breakeven price
+            cost_per_share = transaction_costs / quantity
+            
             if direction == TradeDirection.LONG:
-                final_breakeven = self.round_to_tick_size(breakeven_guess, symbol, round_up=True)
-            else: # SHORT
-                final_breakeven = self.round_to_tick_size(breakeven_guess, symbol, round_up=False)
-
-            final_charges = TradeChargesCalculator(quantity, entry_price, final_breakeven).total_charges()
-
-            logger.info(f"Breakeven calculation converged:")
-            logger.info(f"  Total Charges (estimated): ₹{final_charges:.2f}")
-            logger.info(f"  Cost per Share: ₹{final_charges / quantity:.4f}")
-            logger.info(f"  Final Breakeven Target: ₹{final_breakeven:.2f}")
+                breakeven_price = entry_price + cost_per_share
+                # Round up to next tick size
+                breakeven_target = self.round_to_tick_size(breakeven_price, symbol, round_up=True)
+            else:  # SHORT
+                breakeven_price = entry_price - cost_per_share
+                # Round down to next tick size
+                breakeven_target = self.round_to_tick_size(breakeven_price, symbol, round_up=False)
             
-            return final_breakeven
+            logger.info(f"Breakeven calculation for {symbol}:")
+            logger.info(f"  Entry Price: ₹{entry_price:.2f}")
+            logger.info(f"  Transaction Costs: ₹{transaction_costs:.2f}")
+            logger.info(f"  Cost per Share: ₹{cost_per_share:.4f}")
+            logger.info(f"  Breakeven Target: ₹{breakeven_target:.2f}")
+            logger.info(f"  Tick Size: {self.get_tick_size(symbol)}")
+            
+            return breakeven_target
             
         except Exception as e:
             logger.error(f"Error calculating breakeven price: {str(e)}")
-            # Fallback to a simple calculation on error
-            return entry_price + (entry_price * 0.001) if direction == TradeDirection.LONG else entry_price - (entry_price * 0.001)
+            return entry_price
     
     def execute_trade(self, candidate: TradingCandidate, direction: TradeDirection, 
                      supertrend_value: float, psar_value: float) -> Optional[TradeState]:
@@ -862,22 +829,40 @@ class PrecisionSingleTradeStrategy:
             
             else:  # SHORT
                 fib_targets.sort(key=lambda x: x[1], reverse=True)  # Descending for shorts
-                # Look for next lower level to trail to
-                for level_name, price in fib_targets:
-                    if (price < trade.current_stop_loss and 
-                        current_price <= price):
-                        # Price has reached this level - trail stop to it
-                        logger.info(f"🪜 Fibonacci ladder step: {level_name} at ₹{price:.2f}")
-                        
-                        if self.update_stop_loss_order(price):
-                            trade.last_fibonacci_level = level_name
-                            additional_profit = (trade.current_stop_loss - price) * setup.quantity
-                            trade.profit_secured += additional_profit
-                            
-                            logger.info(f"✅ Stop trailed to: ₹{price:.2f}")
-                            logger.info(f"   Additional profit secured: ₹{additional_profit:.2f}")
-                            logger.info(f"   Total profit secured: ₹{trade.profit_secured:.2f}")
+                
+                # Find the current and previous Fibonacci levels
+                current_level_index = -1
+                for i, (level_name, price) in enumerate(fib_targets):
+                    if current_price <= price: # Price has crossed or is at this level
+                        current_level_index = i
                         break
+                
+                if current_level_index == -1 or current_level_index == len(fib_targets) - 1:
+                    # No new level crossed or already at the last level
+                    return True
+                
+                new_level_price = fib_targets[current_level_index][1]
+                previous_level_price = fib_targets[current_level_index + 1][1] # Next lower level for short
+                
+                # Calculate cushion
+                price_range = abs(new_level_price - previous_level_price)
+                trail_amount = price_range * 0.75
+                
+                new_stop_price = previous_level_price - trail_amount # Stop below previous level for short
+                
+                # Ensure new stop is better than current stop
+                if new_stop_price < trade.current_stop_loss:
+                    logger.info(f"🪜 Fibonacci ladder step: {fib_targets[current_level_index][0]} at ₹{new_level_price:.2f}")
+                    logger.info(f"  Previous level: ₹{previous_level_price:.2f}, Range: ₹{price_range:.2f}, Trail: ₹{trail_amount:.2f}")
+                    
+                    if self.update_stop_loss_order(new_stop_price):
+                        trade.last_fibonacci_level = fib_targets[current_level_index][0]
+                        additional_profit = (trade.current_stop_loss - new_stop_price) * setup.quantity
+                        trade.profit_secured += additional_profit
+                        
+                        logger.info(f"✅ Stop trailed to: ₹{new_stop_price:.2f} (with cushion)")
+                        logger.info(f"   Additional profit secured: ₹{additional_profit:.2f}")
+                        logger.info(f"   Total profit secured: ₹{trade.profit_secured:.2f}")
             
             return True
             

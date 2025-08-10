@@ -14,6 +14,8 @@ import os
 import time
 import threading
 import queue
+import multiprocessing
+import uvicorn
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
@@ -31,6 +33,18 @@ from live_rating_system import LiveRatingSystem
 from precision_single_trade_strategy import PrecisionSingleTradeStrategy
 
 logger = logging.getLogger(__name__)
+
+
+def setup_logging():
+    """Configure logging to write to file"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('bot.log'),
+            logging.StreamHandler()
+        ]
+    )
 
 
 @dataclass
@@ -323,10 +337,15 @@ class StockUniverseVersion:
 class AutomatedTradingBot:
     """Main automated trading bot controller"""
     
-    def __init__(self, config: BotConfig = None, enable_precision_strategy: bool = False):
+    def __init__(self, config: BotConfig = None, enable_precision_strategy: bool = False, 
+                 command_queue=None, shared_status=None):
         self.config = config or BotConfig()
         self.running = False
         self.enable_precision_strategy = enable_precision_strategy
+        
+        # Multi-process communication
+        self.command_queue = command_queue
+        self.shared_status = shared_status
         
         # Core components
         self.access_token = None
@@ -364,6 +383,10 @@ class AutomatedTradingBot:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
+        # Initialize shared status dictionary
+        if self.shared_status is not None:
+            self._initialize_shared_status()
+        
         logger.info("Automated Trading Bot initialized with versioned stock universe")
         if enable_precision_strategy:
             logger.info("Precision Single Trade Strategy: ENABLED")
@@ -374,6 +397,88 @@ class AutomatedTradingBot:
         """Handle shutdown signals"""
         logger.info(f"Received signal {signum}, initiating graceful shutdown")
         self.stop()
+    
+    def _initialize_shared_status(self):
+        """Initialize shared status dictionary with default values"""
+        self.shared_status.update({
+            'bot_state': 'STOPPED',
+            'market_status': 'CLOSED',
+            'active_trade': None,
+            'pnl': 0.0,
+            'top_20_universe': [],
+            'log_messages': [],
+            'trade_log': [],
+            'websocket_connected': False,
+            'last_update': datetime.now().isoformat()
+        })
+    
+    def _process_commands(self):
+        """Process commands from command queue (non-blocking)"""
+        if not self.command_queue:
+            return
+            
+        try:
+            while True:
+                try:
+                    command = self.command_queue.get_nowait()
+                    self._handle_command(command)
+                except queue.Empty:
+                    break
+                except Exception as e:
+                    logger.error(f"Error processing command: {e}")
+        except Exception as e:
+            logger.error(f"Error in command processing: {e}")
+    
+    def _handle_command(self, command: Dict):
+        """Handle individual command"""
+        action = command.get('action', '').upper()
+        
+        if action == 'START':
+            if not self.running:
+                threading.Thread(target=self.start, daemon=True).start()
+                logger.info("Start command received")
+        elif action == 'STOP':
+            if self.running:
+                self.stop()
+                logger.info("Stop command received")
+        elif action == 'FORCE_CLOSE':
+            if self.precision_strategy and self.precision_strategy.active_trade:
+                self.precision_strategy.force_close_trade()
+                logger.info("Force close command received")
+        elif action == 'UPDATE_CONFIG':
+            payload = command.get('payload', {})
+            self._update_configuration(payload)
+            logger.info(f"Config update command received: {payload}")
+        else:
+            logger.warning(f"Unknown command action: {action}")
+    
+    def _update_configuration(self, payload: Dict):
+        """Update configuration based on payload"""
+        module = payload.get('module', '')
+        settings = payload.get('settings', {})
+        
+        if module == 'bot_config':
+            for key, value in settings.items():
+                if hasattr(self.config, key):
+                    setattr(self.config, key, value)
+                    logger.info(f"Updated bot config: {key} = {value}")
+        elif module == 'precision_strategy' and self.precision_strategy:
+            # Update precision strategy configuration
+            for key, value in settings.items():
+                if hasattr(self.precision_strategy, key):
+                    setattr(self.precision_strategy, key, value)
+                    logger.info(f"Updated precision strategy: {key} = {value}")
+    
+    def _update_shared_status(self, updates: Dict):
+        """Update shared status dictionary"""
+        if not self.shared_status:
+            return
+            
+        try:
+            self.shared_status.update(updates)
+            self.shared_status['last_update'] = datetime.now().isoformat()
+        except Exception as e:
+            logger.error(f"Error updating shared status: {e}")
     
     def validate_and_get_access_token(self) -> bool:
         """Validate existing access token or generate a new one"""
@@ -833,6 +938,7 @@ class AutomatedTradingBot:
                         # Create new live rating system
                         live_system = LiveRatingSystem(
                             instrument_token=stock_data['instrument_token'],
+                            tradingsymbol=symbol,  # Pass the trading symbol
                             kite_trader_instance=self.kite_trader
                         )
                         
@@ -1174,50 +1280,105 @@ class AutomatedTradingBot:
             return False
     
     def run(self):
-        """Run the bot and keep it running"""
+        """Run the bot main loop with command processing"""
         try:
-            if not self.start():
-                logger.error("Failed to start bot")
-                return
+            self._update_shared_status({'bot_state': 'IDLE'})
+            logger.info("Bot engine started - waiting for commands or auto-starting...")
             
-            logger.info("Bot is running. Press Ctrl+C to stop.")
-            
-            # Keep the main thread alive
-            while self.running:
+            # Main operational loop
+            while not self.shutdown_event.is_set():
                 try:
-                    # Display current status every 5 minutes
-                    time.sleep(300)  # 5 minutes
+                    # Process commands from command queue (non-blocking)
+                    self._process_commands()
                     
+                    # If bot is running, execute trading logic
                     if self.running:
-                        live_ratings = self.get_live_ratings()
-                        active_count = len([r for r in live_ratings.values() if 'error' not in r])
-                        error_count = len([r for r in live_ratings.values() if 'error' in r])
+                        self._execute_trading_cycle()
                         
-                        logger.info(f"📊 STATUS: {active_count} active live ratings, {error_count} errors, WebSocket: {'✅' if self.websocket_manager.connected else '❌'}")
-                        
-                        # Log top 5 live ratings
-                        sorted_ratings = sorted(
-                            [(symbol, rating) for symbol, rating in live_ratings.items() if 'error' not in rating],
-                            key=lambda x: x[1].get('final_rating', 0),
-                            reverse=True
-                        )
-                        
-                        logger.info("🏆 TOP 5 LIVE RATINGS:")
-                        for i, (symbol, rating) in enumerate(sorted_ratings[:5], 1):
-                            score = rating.get('final_rating', 0)
-                            rating_text = rating.get('rating_text', 'N/A')
-                            logger.info(f"  {i}. {symbol:<12} Score: {score:6.2f} ({rating_text})")
-                
+                    # Update shared status with current state
+                    self._update_status_data()
+                    
+                    # Small sleep to prevent tight loop
+                    time.sleep(1)
+                    
                 except KeyboardInterrupt:
                     logger.info("Received interrupt signal")
                     break
                 except Exception as e:
                     logger.error(f"Error in main loop: {str(e)}")
+                    time.sleep(5)  # Wait before retrying
             
         except Exception as e:
             logger.error(f"Error in bot run loop: {str(e)}")
         finally:
             self.stop()
+    
+    def _execute_trading_cycle(self):
+        """Execute one cycle of trading logic"""
+        try:
+            # Only scan for new trades if no active trade
+            if self.precision_strategy and self.precision_strategy.active_trade is None:
+                self._scan_for_opportunities()
+            
+            # Update active trade if exists
+            if self.precision_strategy and self.precision_strategy.active_trade:
+                self._manage_active_trade()
+                
+        except Exception as e:
+            logger.error(f"Error in trading cycle: {e}")
+    
+    def _scan_for_opportunities(self):
+        """Scan for trading opportunities"""
+        # This would be called by precision strategy
+        # Implementation depends on strategy logic
+        pass
+    
+    def _manage_active_trade(self):
+        """Manage active trade"""
+        # This would handle active trade management
+        # Implementation depends on precision strategy
+        pass
+    
+    def _update_status_data(self):
+        """Update shared status with current data"""
+        if not self.shared_status:
+            return
+            
+        try:
+            updates = {
+                'bot_state': 'RUNNING' if self.running else 'STOPPED',
+                'websocket_connected': self.websocket_manager.connected if self.websocket_manager else False,
+                'top_20_universe': self.top_20_stocks if hasattr(self, 'top_20_stocks') else []
+            }
+            
+            # Add active trade info if available
+            if self.precision_strategy and hasattr(self.precision_strategy, 'active_trade') and self.precision_strategy.active_trade:
+                trade = self.precision_strategy.active_trade
+                updates['active_trade'] = {
+                    'symbol': trade.setup.candidate.symbol,
+                    'direction': trade.setup.direction.value,
+                    'entry_price': trade.setup.entry_price,
+                    'current_price': trade.current_price,
+                    'quantity': trade.setup.quantity,
+                    'pnl': trade.unrealized_pnl,
+                    'stop_loss': trade.current_stop_loss,
+                    'phase': trade.phase.value,
+                    'entry_time': trade.setup.entry_time.isoformat()
+                }
+            else:
+                updates['active_trade'] = None
+            
+            # Add market status
+            current_time = datetime.now().time()
+            market_open = current_time >= datetime.strptime('09:15', '%H:%M').time()
+            market_close = current_time <= datetime.strptime('15:30', '%H:%M').time()
+            is_weekday = datetime.now().weekday() < 5
+            updates['market_status'] = 'OPEN' if (market_open and market_close and is_weekday) else 'CLOSED'
+            
+            self._update_shared_status(updates)
+            
+        except Exception as e:
+            logger.error(f"Error updating status data: {e}")
     
     def stop(self):
         """Stop the automated trading bot"""
@@ -1240,9 +1401,12 @@ class AutomatedTradingBot:
         logger.info("✅ AUTOMATED TRADING BOT STOPPED")
 
 
-def main():
-    """Main function"""
+def run_bot_engine(command_queue, shared_status):
+    """Run the bot engine process"""
     try:
+        setup_logging()
+        logger.info("Starting Bot Engine process")
+        
         # Create bot configuration
         config = BotConfig(
             refresh_interval_minutes=10,
@@ -1251,14 +1415,107 @@ def main():
             enable_caching=True
         )
         
-        # Create and run bot
-        bot = AutomatedTradingBot(config)
+        # Create and run bot with multiprocess communication
+        bot = AutomatedTradingBot(
+            config=config, 
+            enable_precision_strategy=True,
+            command_queue=command_queue,
+            shared_status=shared_status
+        )
+        
         bot.run()
         
     except Exception as e:
-        logger.error(f"Error in main: {str(e)}")
+        logger.error(f"Error in bot engine: {str(e)}")
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        logger.info("Bot engine stopped by user")
+
+
+def run_api_server(command_queue, shared_status):
+    """Run the API server process"""
+    try:
+        setup_logging()
+        logger.info("Starting API Server process")
+        
+        # Import and run API server
+        from api_server import create_app
+        app = create_app(command_queue, shared_status)
+        
+        # Run with uvicorn
+        uvicorn.run(
+            app, 
+            host="127.0.0.1", 
+            port=8000, 
+            log_level="info"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in API server: {str(e)}")
+
+
+def main():
+    """Main launcher function"""
+    try:
+        setup_logging()
+        logger.info("🚀 Starting Unified Trading Bot Application")
+        
+        # Create multiprocessing manager for shared communication
+        manager = multiprocessing.Manager()
+        command_queue = manager.Queue()
+        shared_status = manager.dict()
+        
+        # Create processes
+        bot_process = multiprocessing.Process(
+            target=run_bot_engine,
+            args=(command_queue, shared_status),
+            name="BotEngine"
+        )
+        
+        api_process = multiprocessing.Process(
+            target=run_api_server,
+            args=(command_queue, shared_status),
+            name="APIServer"
+        )
+        
+        # Start processes
+        logger.info("Starting Bot Engine process...")
+        bot_process.start()
+        
+        logger.info("Starting API Server process...")
+        api_process.start()
+        
+        logger.info("✅ All processes started successfully")
+        logger.info("📡 API Server: http://127.0.0.1:8000")
+        logger.info("📊 Dashboard: http://127.0.0.1:8000/dashboard")
+        logger.info("Press Ctrl+C to stop all processes")
+        
+        try:
+            # Wait for KeyboardInterrupt to gracefully shutdown
+            while True:
+                if not bot_process.is_alive() or not api_process.is_alive():
+                    logger.warning("One of the processes died, shutting down...")
+                    break
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Shutdown signal received")
+        
+        # Graceful shutdown
+        logger.info("Shutting down processes...")
+        
+        if api_process.is_alive():
+            api_process.terminate()
+            api_process.join(timeout=5)
+            
+        if bot_process.is_alive():
+            bot_process.terminate()
+            bot_process.join(timeout=10)
+        
+        logger.info("✅ All processes stopped successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in main launcher: {str(e)}")
+    except KeyboardInterrupt:
+        logger.info("Application stopped by user")
 
 
 if __name__ == "__main__":
