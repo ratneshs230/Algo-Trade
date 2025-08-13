@@ -21,6 +21,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from kiteconnect import KiteConnect
 import pyotp
+import stat # Import stat module
 
 # Configuration Module
 class Config:
@@ -32,6 +33,7 @@ class Config:
     USER_ID = os.getenv('KITE_USER_ID', '')
     PASSWORD = os.getenv('KITE_PASSWORD', '')
     TOTP_SECRET_KEY = os.getenv('KITE_TOTP_SECRET_KEY', '')
+    CHROMEDRIVER_PATH = os.getenv('CHROMEDRIVER_PATH', '') # NEW: Chromedriver path
     
     @classmethod
     def validate(cls):
@@ -58,14 +60,101 @@ class KiteLoginAutomation:
         self.driver = None
         
     def _init_webdriver(self):
-        """Initialize Chrome WebDriver with appropriate options"""
+        """Initialize Chrome WebDriver with appropriate options and ensure executable permissions"""
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         
-        # Use webdriver-manager to automatically manage ChromeDriver
-        service = Service(ChromeDriverManager().install())
+        driver_path = None
+        
+        # NEW: Check for CHROMEDRIVER_PATH environment variable first
+        if Config.CHROMEDRIVER_PATH and os.path.exists(Config.CHROMEDRIVER_PATH) and os.access(Config.CHROMEDRIVER_PATH, os.X_OK):
+            driver_path = Config.CHROMEDRIVER_PATH
+            print(f"Using CHROMEDRIVER_PATH from environment variable: {driver_path}")
+        else:
+            try:
+                # Try to use webdriver-manager to automatically manage ChromeDriver
+                driver_path = ChromeDriverManager().install()
+                print(f"Initial driver path from webdriver-manager: {driver_path}")
+                
+                # Fix common issue where webdriver-manager returns wrong file path
+                if driver_path and ('THIRD_PARTY' in driver_path or not driver_path.endswith('chromedriver')):
+                    print("Detected incorrect driver path, searching for actual chromedriver...")
+                    # Look for actual chromedriver executable in the same directory and parent directories
+                    import glob
+                    driver_dir = os.path.dirname(driver_path)
+                    parent_dir = os.path.dirname(driver_dir)
+                    
+                    # Search in current dir, parent dir, and subdirectories
+                    search_dirs = [driver_dir, parent_dir]
+                    found_driver = None
+                    
+                    for search_dir in search_dirs:
+                        if os.path.exists(search_dir):
+                            # Look for chromedriver files
+                            patterns = [
+                                os.path.join(search_dir, 'chromedriver'),
+                                os.path.join(search_dir, 'chromedriver.exe'),
+                                os.path.join(search_dir, '**/chromedriver'),
+                                os.path.join(search_dir, '**/chromedriver.exe'),
+                            ]
+                            
+                            for pattern in patterns:
+                                matches = glob.glob(pattern, recursive=True)
+                                for match in matches:
+                                    if (os.path.exists(match) and os.path.isfile(match) and 
+                                        'THIRD_PARTY' not in match and 'LICENSE' not in match):
+                                        print(f"Found potential chromedriver at: {match}")
+                                        found_driver = match
+                                        break
+                                if found_driver:
+                                    break
+                        if found_driver:
+                            break
+                    
+                    if found_driver:
+                        driver_path = found_driver
+                        print(f"Using corrected driver path: {driver_path}")
+                    else:
+                        print("Could not find valid chromedriver, will try system fallback")
+                        driver_path = None
+                
+                # Ensure the downloaded chromedriver is executable
+                if driver_path and os.path.exists(driver_path) and os.path.isfile(driver_path):
+                    st = os.stat(driver_path)
+                    os.chmod(driver_path, st.st_mode | stat.S_IEXEC)
+                    print(f"Set executable permissions for: {driver_path}")
+                else:
+                    print(f"Warning: Chromedriver not found at {driver_path} after installation attempt.")
+                    driver_path = None # Fallback if not found
+                    
+            except Exception as e:
+                print(f"Error with webdriver_manager: {str(e)}. Attempting fallback to system path.")
+                driver_path = None # Fallback to system path
+                
+            if driver_path is None:
+                # Fallback to common system paths for chromedriver
+                common_paths = [
+                    '/usr/bin/chromedriver',
+                    '/usr/local/bin/chromedriver',
+                    '/opt/google/chrome/chromedriver'
+                ]
+                for path in common_paths:
+                    if os.path.exists(path) and os.access(path, os.X_OK):
+                        driver_path = path
+                        print(f"Using system chromedriver from: {driver_path}")
+                        break
+            
+        if driver_path is None:
+            raise Exception(
+                "Chromedriver not found or not executable. "
+                "Please ensure Chrome browser is installed and a compatible Chromedriver "
+                "is manually downloaded and placed in a system PATH directory (e.g., /usr/local/bin) "
+                "or set the CHROMEDRIVER_PATH environment variable to its location."
+            )
+
+        service = Service(driver_path)
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
         
     def _perform_login(self):

@@ -39,36 +39,15 @@ def main():
         logger.info("🚀 AUTOMATED TRADING BOT LAUNCHER")
         logger.info("="*80)
         
-        # Import and run the bot
-        from automated_trading_bot import AutomatedTradingBot, BotConfig
+        # Import and run the bot's main function
+        from automated_trading_bot import main as automated_bot_main
         
-        # Create configuration with API rate limit friendly settings
-        config = BotConfig(
-            refresh_interval_minutes=15,      # Refresh every 15 minutes (reduced frequency)
-            websocket_retry_delay=30,         # Wait 30 seconds before retry
-            top_stocks_count=20,              # Track top 20 stocks
-            max_worker_threads=3,             # Reduced threads for rate limit compliance
-            enable_caching=True,              # Enable caching
-            cache_expiry_minutes=10,          # Longer cache time to reduce API calls
-            api_request_delay=0.8,            # 800ms delay between requests
-            rate_limit_wait=20                # Wait 20 seconds on rate limit
-        )
-        
-        logger.info("Configuration:")
-        logger.info(f"  📊 Refresh interval: {config.refresh_interval_minutes} minutes")
-        logger.info(f"  🔄 Retry delay: {config.websocket_retry_delay} seconds")
-        logger.info(f"  🎯 Top stocks count: {config.top_stocks_count}")
-        logger.info(f"  🧵 Worker threads: {config.max_worker_threads}")
-        logger.info(f"  💾 Caching enabled: {config.enable_caching}")
-        
-        # Create and run the bot
-        bot = AutomatedTradingBot(config)
-        
-        logger.info("Starting automated trading bot...")
+        logger.info("Starting automated trading bot (including dashboard)...")
+        logger.info("Access dashboard at http://localhost:8000")
         logger.info("Press Ctrl+C to stop the bot gracefully")
         
-        # Run the bot
-        bot.run()
+        # Run the main function of the automated trading bot
+        automated_bot_main()
         
     except KeyboardInterrupt:
         logger.info("Bot stopped by user (Ctrl+C)")

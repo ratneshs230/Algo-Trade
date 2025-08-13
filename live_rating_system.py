@@ -5,9 +5,9 @@ This module implements a high-frequency, real-time stock rating system using a
 Hybrid Calculation Model that separates slow-moving strategic indicators from 
 fast-moving tactical indicators for maximum performance.
 
-Architecture:
-- Tier 1: Strategic Base Score (60min + 30min + 15min) - Updated every 10 minutes
-- Tier 2: Tactical Live Score (1min + 3min + 5min) - Updated every few seconds
+Architecture (Daily timeframe excluded):
+- Tier 1: Strategic Base Score (60min + 30min + 15min) - Updated every 10 minutes (25% weight)
+- Tier 2: Tactical Live Score (1min + 3min + 5min) - Updated every few seconds (75% weight)
 """
 
 import pandas as pd
@@ -23,6 +23,10 @@ class LiveRatingSystem:
     """
     High-frequency real-time stock rating system with hybrid calculation model
     """
+    
+    # Configuration constants
+    MAX_CANDLES_PER_TIMEFRAME = 100  # Maximum candles to store per timeframe
+    MIN_CANDLES_FOR_RATING = 30      # Minimum candles required for rating calculation
     
     def __init__(self, instrument_token: str, tradingsymbol: str, kite_trader_instance, parent_bot=None):
         """
@@ -45,24 +49,22 @@ class LiveRatingSystem:
         self.last_trading_update = None
         self.last_market_close_rating = None
         
-        # Hierarchical timeframe weights (higher weight to shorter timeframes)
+        # Hierarchical timeframe weights (higher weight to shorter timeframes) - Daily removed
         self.timeframe_weights = {
             '1minute': 0.30,    # 30% - Highest weight for immediate signals
             '3minute': 0.25,    # 25% - Very high weight for short-term momentum
             '5minute': 0.20,    # 20% - High weight for quick trends
             '15minute': 0.15,   # 15% - Medium weight for intermediate trends
             '30minute': 0.06,   # 6% - Lower weight for longer trends
-            '60minute': 0.03,   # 3% - Low weight for hourly trends
-            'daily': 0.01       # 1% - Minimal weight for daily trends
+            '60minute': 0.04    # 4% - Adjusted weight for hourly trends (was 3% + 1% from daily)
         }
         
         # Strategic vs Tactical weight distribution
-        self.strategic_weight = self.timeframe_weights['60minute'] + self.timeframe_weights['30minute'] + self.timeframe_weights['15minute']  # 0.24 (removed daily)
+        self.strategic_weight = self.timeframe_weights['60minute'] + self.timeframe_weights['30minute'] + self.timeframe_weights['15minute']  # 0.25 (4% + 6% + 15%)
         self.tactical_weight = self.timeframe_weights['5minute'] + self.timeframe_weights['3minute'] + self.timeframe_weights['1minute']  # 0.75
         
-        # In-memory data store
+        # In-memory data store (daily removed)
         self.data_frames = {
-            'daily': pd.DataFrame(),
             '60minute': pd.DataFrame(),
             '30minute': pd.DataFrame(),
             '15minute': pd.DataFrame(),
@@ -113,7 +115,6 @@ class LiveRatingSystem:
         print(f"Loading historical data for {self.symbol} from local files...")
         
         timeframe_intervals = {
-            'daily': 'daily',
             '60minute': '60minute',
             '30minute': '30minute',
             '15minute': '15minute',
@@ -295,7 +296,7 @@ class LiveRatingSystem:
             for timeframe in ['60minute', '30minute', '15minute']:
                 df = self.data_frames[timeframe]
                 
-                if len(df) < 30:  # Reduced minimum data requirement for faster timeframes
+                if len(df) < self.MIN_CANDLES_FOR_RATING:  # Minimum data requirement
                     strategic_scores[timeframe] = 0.0
                     continue
                 
@@ -433,10 +434,9 @@ class LiveRatingSystem:
             else:
                 self.data_frames[timeframe] = pd.concat([self.data_frames[timeframe], new_row])
             
-            # Keep only recent data (memory management)
-            max_rows = {'1minute': 500, '3minute': 300, '5minute': 200}
-            if len(self.data_frames[timeframe]) > max_rows.get(timeframe, 200):
-                self.data_frames[timeframe] = self.data_frames[timeframe].tail(max_rows.get(timeframe, 200))
+            # Keep only recent data (memory management) - Limited candles for all timeframes
+            if len(self.data_frames[timeframe]) > self.MAX_CANDLES_PER_TIMEFRAME:
+                self.data_frames[timeframe] = self.data_frames[timeframe].tail(self.MAX_CANDLES_PER_TIMEFRAME)
             
             print(f"Finalized {timeframe} candle at {candle_data['start_time']}")
             
@@ -673,8 +673,9 @@ class LiveRatingSystem:
                 'market_open': market_open,
                 'data_source': 'live' if market_open else 'cached',
                 'data_quality': {
-                    'daily_candles': len(self.data_frames['daily']),
                     '60min_candles': len(self.data_frames['60minute']),
+                    '30min_candles': len(self.data_frames['30minute']),
+                    '15min_candles': len(self.data_frames['15minute']),
                     '5min_candles': len(self.data_frames['5minute']),
                     '3min_candles': len(self.data_frames['3minute']),
                     '1min_candles': len(self.data_frames['1minute'])

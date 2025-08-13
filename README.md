@@ -8,26 +8,24 @@ An advanced algorithmic trading system built with Python that integrates with Ze
 - **Live Dashboard**: Real-time monitoring of positions, P&L, and market data
 - **Rating System**: Comprehensive stock rating based on multiple technical indicators
 - **Risk Management**: Built-in position sizing and risk controls
-- **Multi-timeframe Analysis**: Supports 1min, 3min, 5min, 15min, 30min, 60min, and daily timeframes
+- **Multi-timeframe Analysis**: Supports 1min, 3min, 5min, 15min, 30min, and 60min timeframes (Daily removed)
 - **Real-time Data**: Live market data streaming and historical data management
 - **Web Interface**: User-friendly dashboard for monitoring and control
 
 ## 📁 Project Structure
 
 ```
-├── automated_trading_bot.py    # Main automated trading bot
-├── bot.py                     # Core bot functionality
-├── dashboard.py               # Flask web dashboard
+├── automated_trading_bot.py    # Main automated trading bot (includes dashboard)
 ├── kiteConnect.py            # Zerodha Kite API integration
-├── rating_system.py          # Stock rating algorithms
+├── watchlist_rating_system.py  # Stock rating algorithms for watchlist selection
 ├── live_rating_system.py     # Real-time rating updates
-├── trades.py                 # Trade execution and management
 ├── watchlist.py              # Stock watchlist management
 ├── indicator_calculator.py    # Technical indicators calculation
-├── static/                   # CSS, JS, and static assets
-├── templates/                # HTML templates for dashboard
-├── run_automated_bot.py      # Bot runner script
-├── run_dashboard.py          # Dashboard runner script
+├── historical_data/          # Stores downloaded historical price data
+├── instruments/              # Market instrument master data
+├── logs/                     # Trading logs and system events
+├── ratings/                  # Stock rating calculations and history
+├── run_automated_bot.py      # Bot launcher script
 └── requirements.txt          # Python dependencies
 ```
 
@@ -96,12 +94,7 @@ DASHBOARD_PORT=5000
 python run_automated_bot.py
 ```
 
-2. Start the dashboard (in a separate terminal):
-```bash
-python run_dashboard.py
-```
-
-3. Access the dashboard at `http://localhost:5000`
+2. Access the dashboard at `http://localhost:8000`
 
 ### Using Shell Scripts
 
@@ -111,10 +104,7 @@ The project includes convenient shell scripts:
 # Set environment variables
 source set_env.sh
 
-# Run the dashboard
-./run_dashboard.py
-
-# Run the automated bot
+# Run the automated bot (which includes the dashboard)
 ./run_automated_bot.py
 ```
 

@@ -14,21 +14,28 @@ import os
 import time
 import threading
 import queue
-import multiprocessing
 import uvicorn
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set
+from datetime import datetime, timedelta, date
+from typing import Dict, List, Optional, Set, Any
 from dataclasses import dataclass
 import logging
 from concurrent.futures import ThreadPoolExecutor
 import signal
 import sys
 
+# FastAPI imports for dashboard
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.routing import Mount
+from starlette.staticfiles import StaticFiles as StarletteStaticFiles
+
 # KiteConnect imports
 from kiteconnect import KiteTicker
 from kiteConnect import KiteTrader, Config, KiteLoginAutomation
 from watchlist import get_watchlist
-from rating_system import StockRatingSystem
+from watchlist_rating_system import StockRatingSystem
 from live_rating_system import LiveRatingSystem
 from precision_single_trade_strategy import PrecisionSingleTradeStrategy
 
@@ -55,6 +62,10 @@ class BotConfig:
     websocket_retry_delay: int = 30     # Seconds to wait before retrying WebSocket
     max_retry_attempts: int = 5         # Maximum retry attempts for operations
     
+    # Data settings
+    max_candles_per_timeframe: int = 100  # Maximum number of candles to store per timeframe
+    min_candles_for_rating: int = 30      # Minimum candles required for rating calculation
+    
     # Stock selection
     top_stocks_count: int = 20          # Number of top stocks to track live
     
@@ -74,7 +85,8 @@ class BotConfig:
 class WebSocketManager:
     """Manages KiteTicker WebSocket connections with connection pooling"""
     
-    def __init__(self, api_key: str, access_token: str, config: BotConfig):
+    def __init__(self, api_key: str, access_token: str, config: BotConfig, 
+                 enable_precision_strategy: bool = False, precision_strategy=None):
         self.api_key = api_key
         self.access_token = access_token
         self.config = config
@@ -85,10 +97,23 @@ class WebSocketManager:
         self.connection_lock = threading.Lock()
         self.retry_count = 0
         
+        # Precision strategy attributes
+        self.enable_precision_strategy = enable_precision_strategy
+        self.precision_strategy = precision_strategy
+        
         # Callback handlers
         self.tick_handlers: Dict[str, callable] = {}
         
         logger.info("WebSocket Manager initialized")
+    
+    def register_tick_handler(self, instrument_token: str, handler: callable):
+        """Register a callback handler for specific instrument tick data"""
+        self.tick_handlers[instrument_token] = handler
+    
+    def unregister_tick_handler(self, instrument_token: str):
+        """Unregister tick handler for an instrument"""
+        if instrument_token in self.tick_handlers:
+            del self.tick_handlers[instrument_token]
     
     def initialize_websocket(self):
         """Initialize KiteTicker WebSocket connection"""
@@ -193,15 +218,6 @@ class WebSocketManager:
                 
         except Exception as e:
             logger.error(f"Error unsubscribing from stocks: {str(e)}")
-    
-    def register_tick_handler(self, instrument_token: str, handler: callable):
-        """Register a callback handler for specific instrument tick data"""
-        self.tick_handlers[instrument_token] = handler
-    
-    def unregister_tick_handler(self, instrument_token: str):
-        """Unregister tick handler for an instrument"""
-        if instrument_token in self.tick_handlers:
-            del self.tick_handlers[instrument_token]
     
     def _on_ticks(self, ws, ticks):
         """Handle incoming tick data"""
@@ -337,15 +353,10 @@ class StockUniverseVersion:
 class AutomatedTradingBot:
     """Main automated trading bot controller"""
     
-    def __init__(self, config: BotConfig = None, enable_precision_strategy: bool = False, 
-                 command_queue=None, shared_status=None):
+    def __init__(self, config: BotConfig = None, enable_precision_strategy: bool = False):
         self.config = config or BotConfig()
         self.running = False
         self.enable_precision_strategy = enable_precision_strategy
-        
-        # Multi-process communication
-        self.command_queue = command_queue
-        self.shared_status = shared_status
         
         # Core components
         self.access_token = None
@@ -383,9 +394,20 @@ class AutomatedTradingBot:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
-        # Initialize shared status dictionary
-        if self.shared_status is not None:
-            self._initialize_shared_status()
+        # Shared status for dashboard
+        self.shared_status: Dict[str, Any] = {
+            'bot_state': 'STOPPED',
+            'market_status': 'CLOSED',
+            'active_trade': None,
+            'pnl': 0.0,
+            'top_20_universe': [],
+            'log_messages': [],
+            'trade_log': [],
+            'websocket_connected': False,
+            'last_update': datetime.now().isoformat(),
+            'access_token_status': 'Not Validated',
+            'last_validated': 'N/A'
+        }
         
         logger.info("Automated Trading Bot initialized with versioned stock universe")
         if enable_precision_strategy:
@@ -398,97 +420,127 @@ class AutomatedTradingBot:
         logger.info(f"Received signal {signum}, initiating graceful shutdown")
         self.stop()
     
-    def _initialize_shared_status(self):
-        """Initialize shared status dictionary with default values"""
-        self.shared_status.update({
-            'bot_state': 'STOPPED',
-            'market_status': 'CLOSED',
-            'active_trade': None,
-            'pnl': 0.0,
-            'top_20_universe': [],
-            'log_messages': [],
-            'trade_log': [],
-            'websocket_connected': False,
-            'last_update': datetime.now().isoformat()
-        })
-    
-    def _process_commands(self):
-        """Process commands from command queue (non-blocking)"""
-        if not self.command_queue:
-            return
-            
-        try:
-            while True:
-                try:
-                    command = self.command_queue.get_nowait()
-                    self._handle_command(command)
-                except queue.Empty:
-                    break
-                except Exception as e:
-                    logger.error(f"Error processing command: {e}")
-        except Exception as e:
-            logger.error(f"Error in command processing: {e}")
-    
-    def _handle_command(self, command: Dict):
-        """Handle individual command"""
-        action = command.get('action', '').upper()
-        
-        if action == 'START':
-            if not self.running:
-                threading.Thread(target=self.start, daemon=True).start()
-                logger.info("Start command received")
-        elif action == 'STOP':
-            if self.running:
-                self.stop()
-                logger.info("Stop command received")
-        elif action == 'FORCE_CLOSE':
-            if self.precision_strategy and self.precision_strategy.active_trade:
-                self.precision_strategy.force_close_trade()
-                logger.info("Force close command received")
-        elif action == 'UPDATE_CONFIG':
-            payload = command.get('payload', {})
-            self._update_configuration(payload)
-            logger.info(f"Config update command received: {payload}")
-        else:
-            logger.warning(f"Unknown command action: {action}")
-    
-    def _update_configuration(self, payload: Dict):
-        """Update configuration based on payload"""
-        module = payload.get('module', '')
-        settings = payload.get('settings', {})
-        
-        if module == 'bot_config':
-            for key, value in settings.items():
-                if hasattr(self.config, key):
-                    setattr(self.config, key, value)
-                    logger.info(f"Updated bot config: {key} = {value}")
-        elif module == 'precision_strategy' and self.precision_strategy:
-            # Update precision strategy configuration
-            for key, value in settings.items():
-                if hasattr(self.precision_strategy, key):
-                    setattr(self.precision_strategy, key, value)
-                    logger.info(f"Updated precision strategy: {key} = {value}")
-    
     def _update_shared_status(self, updates: Dict):
         """Update shared status dictionary"""
-        if not self.shared_status:
-            return
-            
         try:
             self.shared_status.update(updates)
             self.shared_status['last_update'] = datetime.now().isoformat()
         except Exception as e:
             logger.error(f"Error updating shared status: {e}")
     
+    def _get_live_ratings_for_dashboard(self):
+        """Get live ratings data formatted for dashboard display"""
+        try:
+            # Read live ratings file
+            live_ratings_file = 'ratings/live_ratings.json'
+            if not os.path.exists(live_ratings_file):
+                return []
+            
+            with open(live_ratings_file, 'r') as f:
+                live_data = json.load(f)
+            
+            # Comprehensive token to symbol mapping
+            token_to_symbol = {
+                # Original 5 stocks
+                '779521': 'SBIN',
+                '1510401': 'AXISBANK', 
+                '492033': 'KOTAKBANK',
+                '1270529': 'ICICIBANK',
+                '341249': 'HDFCBANK',
+                
+                # Extended mapping for top NSE stocks (common tokens)
+                '415745': 'ADANIPORTS',
+                '4376065': 'ASIANPAINT', 
+                '4576001': 'BAJAJ-AUTO',
+                '1723649': 'BAJAJFINSV',
+                '103425': 'BAJFINANCE',
+                '523009': 'BHARTIARTL',
+                '2911489': 'BPCL',
+                '2730497': 'BRITANNIA',
+                '1195009': 'CIPLA',
+                '633601': 'COALINDIA',
+                '2905857': 'DIVISLAB',
+                '3001089': 'DRREDDY',
+                '70401': 'EICHERMOT',
+                '175361': 'GRASIM',
+                '5506049': 'HCLTECH',
+                '952577': 'HEROMOTOCO',
+                '130305': 'HINDALCO',
+                '3691009': 'HINDUNILVR',
+                
+                # More common NSE stocks
+                '348929': 'INDUSINDBK',
+                '1346049': 'INFY',
+                '2977281': 'ITC',
+                '315393': 'JSWSTEEL',
+                '225537': 'LT',
+                '2815745': 'M&M',
+                '1850625': 'MARUTI',
+                '4267265': 'NESTLEIND',
+                '2977201': 'NTPC',
+                '633601': 'ONGC',
+                '2920705': 'POWERGRID',
+                '70785': 'RELIANCE',
+                '1346049': 'RELIANCE',
+                '895745': 'SUNPHARMA',
+                '3465729': 'TATAMOTORS',
+                '2953217': 'TATASTEEL',
+                '3824385': 'TCS',
+                '2661633': 'TECHM',
+                '1330177': 'TITAN',
+                '3506689': 'ULTRACEMCO',
+                '3677697': 'UPL',
+                '4708097': 'WIPRO'
+            }
+            
+            # Try to get symbol from bot's instruments if available
+            def get_symbol_for_token(token_str):
+                # First try the mapping
+                if token_str in token_to_symbol:
+                    return token_to_symbol[token_str]
+                
+                # Try to get from bot's instruments data
+                if hasattr(self, 'instruments') and self.instruments:
+                    for instrument in self.instruments:
+                        if str(instrument.get('instrument_token', '')) == token_str:
+                            return instrument.get('tradingsymbol', f"Stock_{token_str}")
+                
+                # Fallback to generic format
+                return f"Stock_{token_str}"
+            
+            # Format data for dashboard
+            dashboard_stocks = []
+            for stock in live_data.get('selected_stocks_live_ratings', []):
+                symbol = get_symbol_for_token(str(stock['instrument_token']))
+                dashboard_stocks.append({
+                    'symbol': symbol,
+                    'rating': stock.get('rating_text', 'N/A'),
+                    'final_score': stock.get('final_rating', 0.0),
+                    'emoji': stock.get('emoji', ''),
+                    'timestamp': stock.get('timestamp', '')
+                })
+            
+            # Sort by final score descending (best ratings first)
+            dashboard_stocks.sort(key=lambda x: x['final_score'], reverse=True)
+            
+            # Return top 20
+            return dashboard_stocks[:20]
+            
+        except Exception as e:
+            logger.error(f"Error getting live ratings for dashboard: {e}")
+            return []
+    
     def validate_and_get_access_token(self) -> bool:
         """Validate existing access token or generate a new one"""
         try:
             logger.info("=== ACCESS TOKEN VALIDATION ===")
+            self._update_shared_status({'access_token_status': 'Validating...'})
             
             # Check for existing token file
             token_file = 'access_token.json'
             today = datetime.now().date()
             
+            access_token = None
             if os.path.exists(token_file):
                 try:
                     with open(token_file, 'r') as f:
@@ -507,6 +559,10 @@ class AutomatedTradingBot:
                             if margins:
                                 logger.info("Access token validated successfully via API test")
                                 self.access_token = access_token
+                                self._update_shared_status({
+                                    'access_token_status': 'Valid',
+                                    'last_validated': datetime.now().isoformat()
+                                })
                                 return True
                             else:
                                 logger.warning("Access token validation failed - API test returned empty response")
@@ -525,15 +581,21 @@ class AutomatedTradingBot:
             
             # Generate new access token
             logger.info("Generating new access token...")
+            self._update_shared_status({'access_token_status': 'Generating New...'})
             automation = KiteLoginAutomation()
             access_token = automation.login()
             
             logger.info("New access token generated successfully")
             self.access_token = access_token
+            self._update_shared_status({
+                'access_token_status': 'Valid',
+                'last_validated': datetime.now().isoformat()
+            })
             return True
             
         except Exception as e:
             logger.error(f"Error in access token validation/generation: {str(e)}")
+            self._update_shared_status({'access_token_status': 'Failed', 'last_validated': datetime.now().isoformat()})
             return False
     
     def initialize_components(self) -> bool:
@@ -549,7 +611,9 @@ class AutomatedTradingBot:
             self.websocket_manager = WebSocketManager(
                 api_key=Config.API_KEY,
                 access_token=self.access_token,
-                config=self.config
+                config=self.config,
+                enable_precision_strategy=self.enable_precision_strategy,
+                precision_strategy=self.precision_strategy
             )
             
             # Initialize Stock Rating System
@@ -580,7 +644,10 @@ class AutomatedTradingBot:
                 return False
             
             with open(instruments_file, 'r') as f:
-                instruments_data = json.load(f)
+                instruments_file_data = json.load(f)
+            
+            # Extract just the instruments array from the JSON
+            instruments_data = instruments_file_data.get('instruments', [])
             
             # Initialize precision strategy
             self.precision_strategy = PrecisionSingleTradeStrategy(
@@ -601,6 +668,49 @@ class AutomatedTradingBot:
         except Exception as e:
             logger.error(f"Error initializing precision strategy: {str(e)}")
             return False
+    
+    def run_precision_strategy_loop(self):
+        """Continuously run the precision strategy to scan and execute trades"""
+        try:
+            logger.info("🎯 Precision Strategy Loop started")
+            
+            while True:
+                try:
+                    if not self.precision_strategy:
+                        logger.warning("Precision strategy not initialized, stopping loop")
+                        break
+                    
+                    # Get current live ratings from all active rating systems
+                    live_ratings = {}
+                    for symbol, system_data in self.live_rating_systems.items():
+                        try:
+                            if isinstance(system_data, dict) and system_data.get('status') == 'active':
+                                rating_system = system_data.get('system')
+                                if rating_system and hasattr(rating_system, 'get_current_rating'):
+                                    current_rating = rating_system.get_current_rating()
+                                    if current_rating:
+                                        live_ratings[symbol] = current_rating
+                        except Exception as e:
+                            logger.warning(f"Error getting rating for {symbol}: {str(e)}")
+                    
+                    if live_ratings:
+                        # Run the precision strategy scan and execution
+                        logger.info(f"🔍 Precision strategy scanning {len(live_ratings)} stocks with ratings")
+                        for symbol, rating in live_ratings.items():
+                            logger.debug(f"   {symbol}: {rating.get('final_rating', 0):.2f}")
+                        self.precision_strategy.scan_and_execute(live_ratings)
+                    else:
+                        logger.debug("No live ratings available for precision strategy")
+                    
+                    # Wait before next iteration
+                    time.sleep(5)  # Check every 5 seconds
+                    
+                except Exception as e:
+                    logger.error(f"Error in precision strategy loop iteration: {str(e)}")
+                    time.sleep(10)  # Wait longer on error
+                    
+        except Exception as e:
+            logger.error(f"Fatal error in precision strategy loop: {str(e)}")
     
     def fetch_instruments_and_watchlist(self) -> bool:
         """Fetch instruments and watchlist data"""
@@ -643,15 +753,17 @@ class AutomatedTradingBot:
                 logger.info("Using cached historical data")
                 return True
             
-            # Define timeframes
+            # Define timeframes (daily removed) - Limited candles for efficiency
+            # Note: days_back adjusted to fetch approximately max_candles per timeframe
+            max_candles = self.config.max_candles_per_timeframe
+            min_candles = self.config.min_candles_for_rating
             timeframes = {
-                '1minute': {'interval': 'minute', 'days_back': 1, 'min_rows': 120},
-                '3minute': {'interval': '3minute', 'days_back': 3, 'min_rows': 120},
-                '5minute': {'interval': '5minute', 'days_back': 5, 'min_rows': 120},
-                '15minute': {'interval': '15minute', 'days_back': 15, 'min_rows': 120},
-                '30minute': {'interval': '30minute', 'days_back': 30, 'min_rows': 120},
-                '60minute': {'interval': '60minute', 'days_back': 60, 'min_rows': 120},
-                'daily': {'interval': 'day', 'days_back': 180, 'min_rows': 120}
+                '1minute': {'interval': 'minute', 'days_back': 1, 'min_rows': min_candles, 'max_rows': max_candles},
+                '3minute': {'interval': '3minute', 'days_back': 1, 'min_rows': min_candles, 'max_rows': max_candles},
+                '5minute': {'interval': '5minute', 'days_back': 2, 'min_rows': min_candles, 'max_rows': max_candles},
+                '15minute': {'interval': '15minute', 'days_back': 3, 'min_rows': min_candles, 'max_rows': max_candles},
+                '30minute': {'interval': '30minute', 'days_back': 5, 'min_rows': min_candles, 'max_rows': max_candles},
+                '60minute': {'interval': '60minute', 'days_back': 10, 'min_rows': min_candles, 'max_rows': max_candles}
             }
             
             # Create directory
@@ -693,6 +805,10 @@ class AutomatedTradingBot:
                             )
                             
                             if historical_data and len(historical_data) >= params['min_rows']:
+                                # Limit to max_rows if specified
+                                if 'max_rows' in params and len(historical_data) > params['max_rows']:
+                                    historical_data = historical_data[-params['max_rows']:]  # Keep most recent candles
+                                
                                 filename = f"{trading_symbol}_{timeframe}.json"
                                 filepath = os.path.join(stock_dir, filename)
                                 
@@ -721,6 +837,10 @@ class AutomatedTradingBot:
                                     )
                                     
                                     if historical_data and len(historical_data) >= params['min_rows']:
+                                        # Limit to max_rows if specified
+                                        if 'max_rows' in params and len(historical_data) > params['max_rows']:
+                                            historical_data = historical_data[-params['max_rows']:]  # Keep most recent candles
+                                        
                                         filename = f"{trading_symbol}_{timeframe}.json"
                                         filepath = os.path.join(stock_dir, filename)
                                         
@@ -1288,9 +1408,6 @@ class AutomatedTradingBot:
             # Main operational loop
             while not self.shutdown_event.is_set():
                 try:
-                    # Process commands from command queue (non-blocking)
-                    self._process_commands()
-                    
                     # If bot is running, execute trading logic
                     if self.running:
                         self._execute_trading_cycle()
@@ -1341,14 +1458,11 @@ class AutomatedTradingBot:
     
     def _update_status_data(self):
         """Update shared status with current data"""
-        if not self.shared_status:
-            return
-            
         try:
             updates = {
                 'bot_state': 'RUNNING' if self.running else 'STOPPED',
                 'websocket_connected': self.websocket_manager.connected if self.websocket_manager else False,
-                'top_20_universe': self.top_20_stocks if hasattr(self, 'top_20_stocks') else []
+                'top_20_universe': self._get_live_ratings_for_dashboard()
             }
             
             # Add active trade info if available
@@ -1380,6 +1494,211 @@ class AutomatedTradingBot:
         except Exception as e:
             logger.error(f"Error updating status data: {e}")
     
+    def start(self):
+        """Start the automated trading bot with all components"""
+        try:
+            logger.info("🚀 STARTING AUTOMATED TRADING BOT")
+            
+            # Set running state
+            self.running = True
+            self.shutdown_event.clear()
+            
+            # Validate access token
+            logger.info("=== ACCESS TOKEN VALIDATION ===")
+            if not self._validate_access_token():
+                logger.error("Failed to validate access token")
+                return False
+            
+            logger.info("=== INITIALIZING COMPONENTS ===")
+            # Initialize components
+            if not self._initialize_components():
+                logger.error("Failed to initialize components")
+                return False
+            
+            # Fetch instruments and watchlist
+            if not self.fetch_instruments_and_watchlist():
+                logger.error("Failed to fetch instruments and watchlist")
+                return False
+            
+            # Fetch historical data
+            if not self.fetch_historical_data():
+                logger.error("Failed to fetch historical data")
+                return False
+            
+            # Rate and filter stocks
+            if not self.rate_and_filter_stocks():
+                logger.error("Failed to rate and filter stocks")
+                return False
+            
+            # Connect WebSocket and start live systems
+            if not self._start_websocket_and_live_systems():
+                logger.error("Failed to start WebSocket and live systems")
+                return False
+            
+            # Initialize precision strategy if enabled
+            if self.enable_precision_strategy:
+                if not self.initialize_precision_strategy():
+                    logger.error("Failed to initialize precision strategy")
+                    return False
+            
+            # Start background threads
+            self._start_background_threads()
+            
+            logger.info("✅ AUTOMATED TRADING BOT STARTED SUCCESSFULLY")
+            logger.info(f"📊 Monitoring {len(self.instruments)} stocks with live ratings")
+            logger.info(f"🔄 Refreshing data every {self.config.refresh_interval_minutes} minutes")
+            logger.info("📡 WebSocket streaming active for real-time data")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error starting automated trading bot: {str(e)}")
+            return False
+    
+    def _validate_access_token(self) -> bool:
+        """Validate access token"""
+        try:
+            # Load existing access token
+            if os.path.exists('access_token.json'):
+                with open('access_token.json', 'r') as f:
+                    token_data = json.load(f)
+                
+                token_date = datetime.strptime(token_data.get('date', ''), '%Y-%m-%d').date()
+                today = date.today()
+                
+                if token_date == today:
+                    self.access_token = token_data.get('access_token')
+                    logger.info(f"Valid access token found for today ({today})")
+                    
+                    # Test the token
+                    test_trader = KiteTrader(api_key=Config.API_KEY, access_token=self.access_token)
+                    test_trader.get_margins()  # Simple API call to validate token
+                    logger.info("Access token validated successfully via API test")
+                    return True
+            
+            logger.error("No valid access token found for today")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Access token validation failed: {str(e)}")
+            return False
+    
+    def _initialize_components(self) -> bool:
+        """Initialize all bot components"""
+        try:
+            # Initialize KiteTrader
+            self.kite_trader = KiteTrader(api_key=Config.API_KEY, access_token=self.access_token)
+            logger.info("KiteTrader initialized")
+            
+            # Initialize WebSocket Manager
+            self.websocket_manager = WebSocketManager(
+                api_key=Config.API_KEY,
+                access_token=self.access_token,
+                config=self.config,
+                enable_precision_strategy=self.enable_precision_strategy,
+                precision_strategy=self.precision_strategy
+            )
+            
+            # Initialize Stock Rating System
+            self.stock_rating_system = StockRatingSystem()
+            logger.info("Stock Rating System initialized")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize components: {str(e)}")
+            return False
+    
+    def _start_websocket_and_live_systems(self) -> bool:
+        """Start WebSocket connection and live rating systems"""
+        try:
+            # Connect WebSocket
+            if not self.websocket_manager.connect():
+                logger.error("Failed to connect WebSocket")
+                return False
+            
+            # Update live rating systems for current stock universe
+            self.update_live_rating_systems()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to start WebSocket and live systems: {str(e)}")
+            return False
+    
+    def _start_background_threads(self):
+        """Start all background threads"""
+        try:
+            # Start main loop thread
+            main_loop_thread = threading.Thread(
+                target=self.run,
+                daemon=True
+            )
+            main_loop_thread.start()
+            logger.info("🔄 Main loop thread started")
+            
+            # Start periodic refresh thread
+            self.scheduler_thread = threading.Thread(
+                target=self.periodic_refresh_task,
+                daemon=True
+            )
+            self.scheduler_thread.start()
+            logger.info("📅 Periodic refresh thread started")
+            
+            # Start data save thread
+            save_thread = threading.Thread(
+                target=self._save_data_periodically,
+                daemon=True
+            )
+            save_thread.start()
+            
+            # Start precision strategy thread if enabled
+            if self.enable_precision_strategy and self.precision_strategy:
+                precision_thread = threading.Thread(
+                    target=self.run_precision_strategy_loop,
+                    daemon=True
+                )
+                precision_thread.start()
+                logger.info("🎯 Precision Single Trade Strategy thread started")
+            
+        except Exception as e:
+            logger.error(f"Error starting background threads: {str(e)}")
+    
+    def _save_data_periodically(self):
+        """Periodically save live ratings data"""
+        while self.running and not self.shutdown_event.is_set():
+            try:
+                # Get live ratings and save them
+                live_ratings = self.get_live_ratings()
+                self._save_live_ratings_data(live_ratings)
+                
+                # Wait 30 seconds before next save
+                time.sleep(30)
+                
+            except Exception as e:
+                logger.error(f"Error in periodic data save: {str(e)}")
+                time.sleep(60)  # Wait longer on error
+    
+    def _save_live_ratings_data(self, live_ratings: Dict[str, Dict]):
+        """Save live ratings data to file"""
+        try:
+            os.makedirs('ratings', exist_ok=True)
+            
+            # Create a simplified format for saving
+            save_data = {
+                'timestamp': datetime.now().isoformat(),
+                'rating_type': 'Automated Live Rating System (Top 10 + Bottom 10)',
+                'total_stocks': len(live_ratings),
+                'selected_stocks_live_ratings': list(live_ratings.values()),
+                'selection_strategy': 'top_10_and_bottom_10'
+            }
+            
+            with open('ratings/live_ratings.json', 'w') as f:
+                json.dump(save_data, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Error saving live ratings data: {str(e)}")
+    
     def stop(self):
         """Stop the automated trading bot"""
         logger.info("🛑 STOPPING AUTOMATED TRADING BOT")
@@ -1401,121 +1720,87 @@ class AutomatedTradingBot:
         logger.info("✅ AUTOMATED TRADING BOT STOPPED")
 
 
-def run_bot_engine(command_queue, shared_status):
-    """Run the bot engine process"""
+# Global bot instance for API access
+bot_instance: Optional[AutomatedTradingBot] = None
+
+app = FastAPI()
+
+# Mount static files for the dashboard
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """Serve the main dashboard HTML file."""
+    with open("index.html", "r") as f:
+        return HTMLResponse(content=f.read())
+
+@app.get("/status")
+async def get_status():
+    """Return the current status of the bot."""
+    if bot_instance:
+        return JSONResponse(content=bot_instance.shared_status)
+    return JSONResponse(content={"error": "Bot not initialized"}, status_code=500)
+
+@app.post("/control")
+async def control_bot(request: Request):
+    """Control the bot (start/stop)."""
+    data = await request.json()
+    action = data.get("action")
+    
+    if bot_instance:
+        if action == "START":
+            if not bot_instance.running:
+                threading.Thread(target=bot_instance.start, daemon=True).start()
+                return JSONResponse(content={"message": "Bot starting..."})
+            return JSONResponse(content={"message": "Bot already running."})
+        elif action == "STOP":
+            if bot_instance.running:
+                bot_instance.stop()
+                return JSONResponse(content={"message": "Bot stopping..."})
+            return JSONResponse(content={"message": "Bot already stopped."})
+        else:
+            return JSONResponse(content={"message": "Invalid action"}, status_code=400)
+    return JSONResponse(content={"error": "Bot not initialized"}, status_code=500)
+
+@app.post("/reset_token")
+async def reset_token():
+    """Reset the Kite access token."""
+    if bot_instance:
+        threading.Thread(target=bot_instance.validate_and_get_access_token, daemon=True).start()
+        return JSONResponse(content={"message": "Access token reset initiated. Please check bot logs for browser interaction."})
+    return JSONResponse(content={"error": "Bot not initialized"}, status_code=500)
+
+
+def main():
+    """Main launcher function"""
+    global bot_instance
     try:
         setup_logging()
-        logger.info("Starting Bot Engine process")
+        logger.info("🚀 Starting Unified Trading Bot Application")
         
-        # Create bot configuration
+        # Initialize the bot instance
         config = BotConfig(
             refresh_interval_minutes=10,
             websocket_retry_delay=30,
             top_stocks_count=20,
             enable_caching=True
         )
+        bot_instance = AutomatedTradingBot(config=config, enable_precision_strategy=True)
         
-        # Create and run bot with multiprocess communication
-        bot = AutomatedTradingBot(
-            config=config, 
-            enable_precision_strategy=True,
-            command_queue=command_queue,
-            shared_status=shared_status
-        )
-        
-        bot.run()
-        
-    except Exception as e:
-        logger.error(f"Error in bot engine: {str(e)}")
-    except KeyboardInterrupt:
-        logger.info("Bot engine stopped by user")
-
-
-def run_api_server(command_queue, shared_status):
-    """Run the API server process"""
-    try:
-        setup_logging()
-        logger.info("Starting API Server process")
-        
-        # Import and run API server
-        from api_server import create_app
-        app = create_app(command_queue, shared_status)
-        
-        # Run with uvicorn
+        # Start the FastAPI server
         uvicorn.run(
             app, 
-            host="127.0.0.1", 
+            host="0.0.0.0", # Listen on all interfaces
             port=8000, 
             log_level="info"
         )
         
     except Exception as e:
-        logger.error(f"Error in API server: {str(e)}")
-
-
-def main():
-    """Main launcher function"""
-    try:
-        setup_logging()
-        logger.info("🚀 Starting Unified Trading Bot Application")
-        
-        # Create multiprocessing manager for shared communication
-        manager = multiprocessing.Manager()
-        command_queue = manager.Queue()
-        shared_status = manager.dict()
-        
-        # Create processes
-        bot_process = multiprocessing.Process(
-            target=run_bot_engine,
-            args=(command_queue, shared_status),
-            name="BotEngine"
-        )
-        
-        api_process = multiprocessing.Process(
-            target=run_api_server,
-            args=(command_queue, shared_status),
-            name="APIServer"
-        )
-        
-        # Start processes
-        logger.info("Starting Bot Engine process...")
-        bot_process.start()
-        
-        logger.info("Starting API Server process...")
-        api_process.start()
-        
-        logger.info("✅ All processes started successfully")
-        logger.info("📡 API Server: http://127.0.0.1:8000")
-        logger.info("📊 Dashboard: http://127.0.0.1:8000/dashboard")
-        logger.info("Press Ctrl+C to stop all processes")
-        
-        try:
-            # Wait for KeyboardInterrupt to gracefully shutdown
-            while True:
-                if not bot_process.is_alive() or not api_process.is_alive():
-                    logger.warning("One of the processes died, shutting down...")
-                    break
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Shutdown signal received")
-        
-        # Graceful shutdown
-        logger.info("Shutting down processes...")
-        
-        if api_process.is_alive():
-            api_process.terminate()
-            api_process.join(timeout=5)
-            
-        if bot_process.is_alive():
-            bot_process.terminate()
-            bot_process.join(timeout=10)
-        
-        logger.info("✅ All processes stopped successfully")
-        
-    except Exception as e:
         logger.error(f"Error in main launcher: {str(e)}")
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
+        if bot_instance:
+            bot_instance.stop()
 
 
 if __name__ == "__main__":

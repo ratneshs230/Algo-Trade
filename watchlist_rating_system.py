@@ -1,11 +1,12 @@
 """
-Stock Rating System
+Watchlist Rating System
 
 This module implements a comprehensive stock rating system that:
-1. Calculates technical indicator scores across multiple timeframes
-2. Applies timeframe-specific weights
+1. Calculates technical indicator scores across 6 timeframes (excluding daily)
+2. Applies timeframe-specific weights with short-term focus
 3. Generates final composite scores and ratings
 4. Provides actionable buy/sell/neutral recommendations
+5. Used for selecting top 20 stocks from watchlist for live monitoring
 """
 
 import json
@@ -16,20 +17,22 @@ from indicator_calculator import IndicatorCalculator, extract_ohlcv_from_histori
 
 
 class StockRatingSystem:
-    """Comprehensive stock rating system with multi-timeframe analysis"""
+    """Comprehensive watchlist rating system with 6-timeframe analysis (excluding daily)"""
+    
+    # Configuration constants
+    MIN_CANDLES_FOR_RATING = 30  # Minimum candles required for rating calculation
     
     def __init__(self):
         self.calculator = IndicatorCalculator()
         
-        # Timeframe weights (short-term focused approach)
+        # Timeframe weights (short-term focused approach) - Daily removed
         self.timeframe_weights = {
             '1minute': 0.30,    # 30% - Highest weight for immediate signals
             '3minute': 0.25,    # 25% - Very high weight for short-term momentum
             '5minute': 0.20,    # 20% - High weight for quick trends
             '15minute': 0.15,   # 15% - Medium weight for intermediate trends
             '30minute': 0.06,   # 6% - Lower weight for longer trends
-            '60minute': 0.03,   # 3% - Low weight for hourly trends
-            'daily': 0.01       # 1% - Minimal weight for daily trends
+            '60minute': 0.04    # 4% - Adjusted weight for hourly trends (was 3% + 1% from daily)
         }
         
         # Indicator weights (equal weighting for simplicity)
@@ -54,8 +57,13 @@ class StockRatingSystem:
         }
     
     def load_historical_data(self, symbol: str, timeframe: str) -> Optional[List[Dict]]:
-        """Load historical data for a specific symbol and timeframe"""
+        """Load historical data for a specific symbol and timeframe (excluding daily)"""
         try:
+            # Skip daily timeframe entirely
+            if timeframe == 'daily':
+                print(f"Daily timeframe excluded from rating system for {symbol}")
+                return None
+                
             filepath = os.path.join('historical_data', symbol, f"{symbol}_{timeframe}.json")
             
             if not os.path.exists(filepath):
@@ -76,7 +84,8 @@ class StockRatingSystem:
         # Load historical data
         historical_data = self.load_historical_data(symbol, timeframe)
         
-        if not historical_data or len(historical_data) < 50:
+        # Check minimum candle requirement
+        if not historical_data or len(historical_data) < self.MIN_CANDLES_FOR_RATING:
             return 0.0, {}
         
         # Extract OHLCV data
@@ -269,15 +278,15 @@ class StockRatingSystem:
                         'instrument_token': instrument.get('instrument_token'),
                         'exchange_token': instrument.get('exchange_token'),
                         'tradingsymbol': instrument.get('tradingsymbol'),
-                        'name': instrument.get('name'),
-                        'last_price': instrument.get('last_price'),
-                        'expiry': instrument.get('expiry'),
-                        'strike': instrument.get('strike'),
-                        'tick_size': instrument.get('tick_size'),
-                        'lot_size': instrument.get('lot_size'),
-                        'instrument_type': instrument.get('instrument_type'),
-                        'segment': instrument.get('segment'),
-                        'exchange': instrument.get('exchange')
+                        'name': None,
+                        'last_price': None,
+                        'expiry': None,
+                        'strike': None,
+                        'tick_size': None,
+                        'lot_size': None,
+                        'instrument_type': None,
+                        'segment': None,
+                        'exchange': None
                     }
                 
                 reports.append(error_report)
@@ -435,10 +444,11 @@ if __name__ == "__main__":
     symbols = get_symbols_from_instruments()
     
     if not symbols:
-        print("No symbols found. Please run bot.py first to download instruments and historical data.")
+        print("No symbols found. Please run automated_trading_bot.py first to download instruments and historical data.")
         exit(1)
     
     print(f"Found {len(symbols)} symbols in watchlist")
+    print("Using 6 timeframes (1min, 3min, 5min, 15min, 30min, 60min) - Daily excluded")
     
     # Rate all stocks
     reports = rating_system.rate_multiple_stocks(symbols)
@@ -449,4 +459,4 @@ if __name__ == "__main__":
     # Save to file
     rating_system.save_ratings_to_file(reports)
     
-    print("\nRating process completed!")
+    print("\nWatchlist rating process completed!")

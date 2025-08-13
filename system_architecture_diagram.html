@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorithmic Trading System - Architecture & Flow Diagrams</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #2d3748;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #718096;
+            margin-bottom: 40px;
+            font-size: 1.2em;
+        }
+        .diagram-section {
+            margin-bottom: 50px;
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px solid #e2e8f0;
+        }
+        h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            font-size: 1.8em;
+        }
+        .icon {
+            width: 35px;
+            height: 35px;
+            margin-right: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            color: #4a5568;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        .flow-description {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .flow-description h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        .flow-description ul {
+            color: #4a5568;
+            line-height: 1.8;
+        }
+        .flow-description li {
+            margin-bottom: 8px;
+        }
+        .highlight {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Algorithmic Trading System Architecture</h1>
+        <p class="subtitle">Complete Logic Flow & System Design</p>
+
+        <!-- 1. High-Level System Overview -->
+        <div class="diagram-section">
+            <h2><span class="icon">1</span>High-Level System Overview</h2>
+            <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background -->
+                <rect width="1200" height="600" fill="#f8f9fa"/>
+                
+                <!-- Title -->
+                <text x="600" y="30" font-size="20" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                    Complete Trading System Architecture
+                </text>
+                
+                <!-- Pre-Market Phase -->
+                <g id="pre-market">
+                    <rect x="50" y="70" width="300" height="450" fill="#e6f3ff" stroke="#4a90e2" stroke-width="2" rx="10"/>
+                    <text x="200" y="100" font-size="16" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                        Pre-Market Phase
+                    </text>
+                    
+                    <!-- Components -->
+                    <rect x="80" y="130" width="240" height="50" fill="#4a90e2" rx="5"/>
+                    <text x="200" y="160" font-size="14" text-anchor="middle" fill="white">
+                        Watchlist Manager
+                    </text>
+                    
+                    <rect x="80" y="200" width="240" height="50" fill="#4a90e2" rx="5"/>
+                    <text x="200" y="230" font-size="14" text-anchor="middle" fill="white">
+                        Historical Data Fetcher
+                    </text>
+                    
+                    <rect x="80" y="270" width="240" height="50" fill="#4a90e2" rx="5"/>
+                    <text x="200" y="300" font-size="14" text-anchor="middle" fill="white">
+                        Watchlist Rating System
+                    </text>
+                    
+                    <rect x="80" y="340" width="240" height="50" fill="#2563eb" rx="5"/>
+                    <text x="200" y="370" font-size="14" text-anchor="middle" fill="white">
+                        Top 20 Stock Selection
+                    </text>
+                    
+                    <!-- Arrow -->
+                    <path d="M 200 410 L 200 470" stroke="#4a90e2" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+                    <text x="200" y="450" font-size="12" text-anchor="middle" fill="#4a5568">
+                        Selected Stocks
+                    </text>
+                </g>
+                
+                <!-- Market Hours Phase -->
+                <g id="market-hours">
+                    <rect x="420" y="70" width="350" height="450" fill="#ffe6e6" stroke="#e24a4a" stroke-width="2" rx="10"/>
+                    <text x="595" y="100" font-size="16" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                        Market Hours (9:15 AM - 3:30 PM)
+                    </text>
+                    
+                    <!-- Components -->
+                    <rect x="450" y="130" width="290" height="50" fill="#e24a4a" rx="5"/>
+                    <text x="595" y="160" font-size="14" text-anchor="middle" fill="white">
+                        WebSocket Manager (Live Ticks)
+                    </text>
+                    
+                    <rect x="450" y="200" width="290" height="50" fill="#e24a4a" rx="5"/>
+                    <text x="595" y="230" font-size="14" text-anchor="middle" fill="white">
+                        Live Rating System (20 Stocks)
+                    </text>
+                    
+                    <rect x="450" y="270" width="140" height="50" fill="#dc2626" rx="5"/>
+                    <text x="520" y="300" font-size="14" text-anchor="middle" fill="white">
+                        Strategic Score
+                    </text>
+                    
+                    <rect x="600" y="270" width="140" height="50" fill="#dc2626" rx="5"/>
+                    <text x="670" y="300" font-size="14" text-anchor="middle" fill="white">
+                        Tactical Score
+                    </text>
+                    
+                    <rect x="450" y="340" width="290" height="50" fill="#991b1b" rx="5"/>
+                    <text x="595" y="370" font-size="14" text-anchor="middle" fill="white">
+                        Trading Strategy Engine
+                    </text>
+                    
+                    <rect x="450" y="410" width="290" height="50" fill="#7f1d1d" rx="5"/>
+                    <text x="595" y="440" font-size="14" text-anchor="middle" fill="white">
+                        Order Execution (Kite API)
+                    </text>
+                </g>
+                
+                <!-- Monitoring & Control -->
+                <g id="monitoring">
+                    <rect x="840" y="70" width="310" height="450" fill="#e6ffe6" stroke="#4ae24a" stroke-width="2" rx="10"/>
+                    <text x="995" y="100" font-size="16" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                        Monitoring & Control
+                    </text>
+                    
+                    <!-- Components -->
+                    <rect x="870" y="130" width="250" height="50" fill="#4ae24a" rx="5"/>
+                    <text x="995" y="160" font-size="14" text-anchor="middle" fill="white">
+                        Web Dashboard (Flask)
+                    </text>
+                    
+                    <rect x="870" y="200" width="250" height="50" fill="#4ae24a" rx="5"/>
+                    <text x="995" y="230" font-size="14" text-anchor="middle" fill="white">
+                        Position Manager
+                    </text>
+                    
+                    <rect x="870" y="270" width="250" height="50" fill="#4ae24a" rx="5"/>
+                    <text x="995" y="300" font-size="14" text-anchor="middle" fill="white">
+                        Risk Management
+                    </text>
+                    
+                    <rect x="870" y="340" width="250" height="50" fill="#4ae24a" rx="5"/>
+                    <text x="995" y="370" font-size="14" text-anchor="middle" fill="white">
+                        P&L Tracking
+                    </text>
+                    
+                    <rect x="870" y="410" width="250" height="50" fill="#16a34a" rx="5"/>
+                    <text x="995" y="440" font-size="14" text-anchor="middle" fill="white">
+                        State Persistence (JSON)
+                    </text>
+                </g>
+                
+                <!-- Arrows -->
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
+                        <polygon points="0 0, 10 5, 0 10" fill="#4a5568"/>
+                    </marker>
+                </defs>
+                
+                <!-- Flow arrows -->
+                <path d="M 350 295 L 420 295" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                <path d="M 770 295 L 840 295" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Bidirectional arrow for WebSocket -->
+                <path d="M 595 180 L 595 200" stroke="#dc2626" stroke-width="2" fill="none"/>
+                <circle cx="595" cy="175" r="3" fill="#dc2626"/>
+                <circle cx="595" cy="180" r="3" fill="#dc2626"/>
+            </svg>
+            
+            <div class="flow-description">
+                <h3>System Flow Overview</h3>
+                <ul>
+                    <li><span class="highlight">Pre-Market Phase:</span> Analyzes ~200 stocks from watchlist, calculates ratings across 6 timeframes, selects top 20 performers</li>
+                    <li><span class="highlight">Market Hours Phase:</span> Monitors selected 20 stocks with live WebSocket data, updates ratings in real-time, executes trades based on strategy</li>
+                    <li><span class="highlight">Monitoring & Control:</span> Provides web interface for monitoring, manages positions, tracks P&L, persists state for recovery</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 2. Pre-Market Workflow -->
+        <div class="diagram-section">
+            <h2><span class="icon">2</span>Pre-Market Workflow (Stock Selection)</h2>
+            <svg viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background -->
+                <rect width="1200" height="700" fill="#f8f9fa"/>
+                
+                <!-- Title -->
+                <text x="600" y="30" font-size="20" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                    Pre-Market Stock Selection Process
+                </text>
+                
+                <!-- Flow Steps -->
+                <!-- Step 1 -->
+                <rect x="50" y="80" width="200" height="80" fill="#6366f1" rx="10"/>
+                <text x="150" y="110" font-size="14" text-anchor="middle" fill="white">
+                    Load Watchlist
+                </text>
+                <text x="150" y="130" font-size="12" text-anchor="middle" fill="white">
+                    (~200 stocks)
+                </text>
+                <text x="150" y="150" font-size="11" text-anchor="middle" fill="white">
+                    watchlist.json
+                </text>
+                
+                <!-- Arrow -->
+                <path d="M 250 120 L 330 120" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Step 2 -->
+                <rect x="330" y="80" width="200" height="80" fill="#8b5cf6" rx="10"/>
+                <text x="430" y="110" font-size="14" text-anchor="middle" fill="white">
+                    Fetch Historical Data
+                </text>
+                <text x="430" y="130" font-size="12" text-anchor="middle" fill="white">
+                    6 Timeframes per stock
+                </text>
+                <text x="430" y="150" font-size="11" text-anchor="middle" fill="white">
+                    (1m, 3m, 5m, 15m, 30m, 60m)
+                </text>
+                
+                <!-- Arrow -->
+                <path d="M 530 120 L 610 120" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Step 3 -->
+                <rect x="610" y="80" width="200" height="80" fill="#a855f7" rx="10"/>
+                <text x="710" y="110" font-size="14" text-anchor="middle" fill="white">
+                    Calculate Indicators
+                </text>
+                <text x="710" y="130" font-size="12" text-anchor="middle" fill="white">
+                    For Each Timeframe
+                </text>
+                <text x="710" y="150" font-size="11" text-anchor="middle" fill="white">
+                    (8 indicators per TF)
+                </text>
+                
+                <!-- Arrow down -->
+                <path d="M 710 160 L 710 220" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Indicator Details Box -->
+                <rect x="550" y="220" width="320" height="180" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="10"/>
+                <text x="710" y="250" font-size="14" font-weight="bold" text-anchor="middle" fill="#92400e">
+                    Technical Indicators Calculated
+                </text>
+                
+                <text x="570" y="280" font-size="12" fill="#92400e">• EMA Crossover (12/20/50)</text>
+                <text x="570" y="305" font-size="12" fill="#92400e">• Price vs MA200</text>
+                <text x="570" y="330" font-size="12" fill="#92400e">• MACD (12/26/9)</text>
+                <text x="570" y="355" font-size="12" fill="#92400e">• ADX (Trend Strength)</text>
+                
+                <text x="720" y="280" font-size="12" fill="#92400e">• RSI (14)</text>
+                <text x="720" y="305" font-size="12" fill="#92400e">• Stochastic</text>
+                <text x="720" y="330" font-size="12" fill="#92400e">• Bollinger Bands</text>
+                <text x="720" y="355" font-size="12" fill="#92400e">• OBV (Volume)</text>
+                
+                <text x="710" y="385" font-size="11" font-style="italic" text-anchor="middle" fill="#92400e">
+                    Each indicator returns score: -1 to +1
+                </text>
+                
+                <!-- Arrow down -->
+                <path d="M 710 400 L 710 460" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Step 4 -->
+                <rect x="610" y="460" width="200" height="80" fill="#c084fc" rx="10"/>
+                <text x="710" y="490" font-size="14" text-anchor="middle" fill="white">
+                    Apply Timeframe
+                </text>
+                <text x="710" y="510" font-size="14" text-anchor="middle" fill="white">
+                    Weights
+                </text>
+                <text x="710" y="530" font-size="11" text-anchor="middle" fill="white">
+                    (Short-term focused)
+                </text>
+                
+                <!-- Arrow left -->
+                <path d="M 610 500 L 530 500" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Weight Distribution Box -->
+                <rect x="230" y="440" width="300" height="160" fill="#dcfce7" stroke="#22c55e" stroke-width="2" rx="10"/>
+                <text x="380" y="470" font-size="14" font-weight="bold" text-anchor="middle" fill="#14532d">
+                    Timeframe Weight Distribution
+                </text>
+                
+                <rect x="250" y="490" width="180" height="15" fill="#ef4444"/>
+                <text x="440" y="502" font-size="11" fill="#14532d">1min: 30%</text>
+                
+                <rect x="250" y="510" width="150" height="15" fill="#f97316"/>
+                <text x="440" y="522" font-size="11" fill="#14532d">3min: 25%</text>
+                
+                <rect x="250" y="530" width="120" height="15" fill="#eab308"/>
+                <text x="440" y="542" font-size="11" fill="#14532d">5min: 20%</text>
+                
+                <rect x="250" y="550" width="90" height="15" fill="#84cc16"/>
+                <text x="440" y="562" font-size="11" fill="#14532d">15min: 15%</text>
+                
+                <rect x="250" y="570" width="36" height="15" fill="#22c55e"/>
+                <text x="440" y="582" font-size="11" fill="#14532d">30min: 6%</text>
+                
+                <rect x="250" y="590" width="24" height="15" fill="#06b6d4"/>
+                <text x="440" y="602" font-size="11" fill="#14532d">60min: 4%</text>
+                
+                <!-- Arrow left -->
+                <path d="M 230 500 L 150 500" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Step 5 -->
+                <rect x="50" y="460" width="150" height="80" fill="#d8b4fe" rx="10"/>
+                <text x="125" y="490" font-size="14" text-anchor="middle" fill="white">
+                    Calculate Final
+                </text>
+                <text x="125" y="510" font-size="14" text-anchor="middle" fill="white">
+                    Stock Rating
+                </text>
+                <text x="125" y="530" font-size="11" text-anchor="middle" fill="white">
+                    (-10 to +10)
+                </text>
+                
+                <!-- Arrow up -->
+                <path d="M 125 460 L 125 340" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Step 6 -->
+                <rect x="50" y="260" width="150" height="80" fill="#e9d5ff" rx="10"/>
+                <text x="125" y="290" font-size="14" text-anchor="middle" fill="#581c87">
+                    Sort & Select
+                </text>
+                <text x="125" y="310" font-size="14" text-anchor="middle" fill="#581c87">
+                    Top 20 Stocks
+                </text>
+                <text x="125" y="330" font-size="11" text-anchor="middle" fill="#581c87">
+                    (Highest ratings)
+                </text>
+                
+                <!-- Output -->
+                <rect x="920" y="260" width="220" height="120" fill="#dbeafe" stroke="#2563eb" stroke-width="3" rx="10"/>
+                <text x="1030" y="290" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e3a8a">
+                    Selected Universe
+                </text>
+                <text x="1030" y="320" font-size="14" text-anchor="middle" fill="#1e3a8a">
+                    20 Top-Rated Stocks
+                </text>
+                <text x="1030" y="345" font-size="12" text-anchor="middle" fill="#1e3a8a">
+                    Ready for Live Trading
+                </text>
+                <text x="1030" y="370" font-size="11" font-style="italic" text-anchor="middle" fill="#1e3a8a">
+                    Updated every 30 minutes
+                </text>
+                
+                <!-- Arrow to output -->
+                <path d="M 200 300 L 920 300" stroke="#2563eb" stroke-width="3" fill="none" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+            </svg>
+            
+            <div class="flow-description">
+                <h3>Pre-Market Process Details</h3>
+                <ul>
+                    <li><span class="highlight">Data Volume:</span> ~200 stocks × 6 timeframes × 500+ candles = millions of data points processed</li>
+                    <li><span class="highlight">Calculation Time:</span> Typically completes in 2-3 minutes for entire watchlist</li>
+                    <li><span class="highlight">Selection Criteria:</span> Top 20 stocks with highest composite ratings (strong momentum + trend signals)</li>
+                    <li><span class="highlight">Update Frequency:</span> Every 30 minutes to adapt to changing market conditions</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 3. Live Trading Workflow -->
+        <div class="diagram-section">
+            <h2><span class="icon">3</span>Live Trading Workflow (Market Hours)</h2>
+            <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background -->
+                <rect width="1200" height="800" fill="#f8f9fa"/>
+                
+                <!-- Title -->
+                <text x="600" y="30" font-size="20" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                    Real-Time Trading Process (9:15 AM - 3:30 PM)
+                </text>
+                
+                <!-- WebSocket Connection -->
+                <rect x="50" y="80" width="180" height="60" fill="#ef4444" rx="10"/>
+                <text x="140" y="105" font-size="14" text-anchor="middle" fill="white">
+                    WebSocket
+                </text>
+                <text x="140" y="125" font-size="12" text-anchor="middle" fill="white">
+                    Live Tick Stream
+                </text>
+                
+                <!-- Tick Data -->
+                <rect x="50" y="170" width="180" height="100" fill="#fee2e2" stroke="#ef4444" stroke-width="2" rx="10"/>
+                <text x="140" y="195" font-size="12" font-weight="bold" text-anchor="middle" fill="#991b1b">
+                    Tick Data
+                </text>
+                <text x="60" y="215" font-size="11" fill="#991b1b">• Price: ₹2,450.50</text>
+                <text x="60" y="235" font-size="11" fill="#991b1b">• Volume: 10,000</text>
+                <text x="60" y="255" font-size="11" fill="#991b1b">• Timestamp: ms</text>
+                
+                <!-- Arrow to Live Rating -->
+                <path d="M 230 220 L 320 220" stroke="#ef4444" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+                <text x="275" y="210" font-size="11" text-anchor="middle" fill="#ef4444">Every tick</text>
+                
+                <!-- Live Rating System Box -->
+                <g id="live-rating-box">
+                    <rect x="320" y="80" width="400" height="600" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="10"/>
+                    <text x="520" y="110" font-size="16" font-weight="bold" text-anchor="middle" fill="#92400e">
+                        Live Rating System (Per Stock)
+                    </text>
+                    
+                    <!-- Tactical Processing -->
+                    <rect x="340" y="140" width="360" height="200" fill="#fff7ed" stroke="#f97316" stroke-width="1" rx="8"/>
+                    <text x="520" y="165" font-size="14" font-weight="bold" text-anchor="middle" fill="#7c2d12">
+                        Tactical Processing (75% weight)
+                    </text>
+                    <text x="520" y="185" font-size="11" font-style="italic" text-anchor="middle" fill="#7c2d12">
+                        Updates: Every few seconds
+                    </text>
+                    
+                    <text x="360" y="210" font-size="12" fill="#7c2d12">1. Update incomplete candles</text>
+                    <text x="380" y="230" font-size="11" fill="#7c2d12">• 1-minute candle</text>
+                    <text x="380" y="248" font-size="11" fill="#7c2d12">• 3-minute candle</text>
+                    <text x="380" y="266" font-size="11" fill="#7c2d12">• 5-minute candle</text>
+                    
+                    <text x="360" y="290" font-size="12" fill="#7c2d12">2. Incremental indicator updates</text>
+                    <text x="380" y="310" font-size="11" fill="#7c2d12">• EMA (12, 20, 50)</text>
+                    <text x="380" y="328" font-size="11" fill="#7c2d12">• Live price positions</text>
+                    
+                    <!-- Strategic Processing -->
+                    <rect x="340" y="360" width="360" height="140" fill="#f0fdf4" stroke="#22c55e" stroke-width="1" rx="8"/>
+                    <text x="520" y="385" font-size="14" font-weight="bold" text-anchor="middle" fill="#14532d">
+                        Strategic Processing (25% weight)
+                    </text>
+                    <text x="520" y="405" font-size="11" font-style="italic" text-anchor="middle" fill="#14532d">
+                        Updates: Every 10 minutes
+                    </text>
+                    
+                    <text x="360" y="430" font-size="12" fill="#14532d">Full indicator recalculation:</text>
+                    <text x="380" y="450" font-size="11" fill="#14532d">• 60-minute timeframe</text>
+                    <text x="380" y="468" font-size="11" fill="#14532d">• 30-minute timeframe</text>
+                    <text x="380" y="486" font-size="11" fill="#14532d">• 15-minute timeframe</text>
+                    
+                    <!-- Combined Score -->
+                    <rect x="340" y="520" width="360" height="80" fill="#e0e7ff" stroke="#6366f1" stroke-width="2" rx="8"/>
+                    <text x="520" y="545" font-size="14" font-weight="bold" text-anchor="middle" fill="#312e81">
+                        Composite Rating Calculation
+                    </text>
+                    <text x="520" y="565" font-size="12" text-anchor="middle" fill="#312e81">
+                        Strategic (25%) + Tactical (75%)
+                    </text>
+                    <text x="520" y="585" font-size="12" text-anchor="middle" fill="#312e81">
+                        Final Rating: -10 to +10
+                    </text>
+                    
+                    <!-- Rating Categories -->
+                    <rect x="340" y="620" width="360" height="50" fill="#ddd6fe" stroke="#8b5cf6" stroke-width="1" rx="8"/>
+                    <text x="360" y="645" font-size="11" fill="#4c1d95">Strong Buy (≥7.5)</text>
+                    <text x="460" y="645" font-size="11" fill="#4c1d95">Buy (≥2.5)</text>
+                    <text x="530" y="645" font-size="11" fill="#4c1d95">Neutral (-2.4 to 2.4)</text>
+                    <text x="360" y="660" font-size="11" fill="#4c1d95">Sell (≤-2.5)</text>
+                    <text x="460" y="660" font-size="11" fill="#4c1d95">Strong Sell (≤-7.5)</text>
+                </g>
+                
+                <!-- Arrow to Strategy -->
+                <path d="M 720 380 L 800 380" stroke="#6366f1" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+                <text x="760" y="370" font-size="11" text-anchor="middle" fill="#6366f1">Rating</text>
+                
+                <!-- Trading Strategy -->
+                <rect x="800" y="200" width="350" height="360" fill="#fee2e2" stroke="#dc2626" stroke-width="2" rx="10"/>
+                <text x="975" y="230" font-size="16" font-weight="bold" text-anchor="middle" fill="#7f1d1d">
+                    Precision Trading Strategy
+                </text>
+                
+                <!-- Entry Conditions -->
+                <rect x="820" y="250" width="310" height="120" fill="#fef2f2" stroke="#ef4444" stroke-width="1" rx="8"/>
+                <text x="975" y="275" font-size="13" font-weight="bold" text-anchor="middle" fill="#991b1b">
+                    Entry Conditions (ALL must be true)
+                </text>
+                <text x="830" y="295" font-size="11" fill="#991b1b">✓ Rating ≥ 7.5 (Strong Buy)</text>
+                <text x="830" y="312" font-size="11" fill="#991b1b">✓ No existing position</text>
+                <text x="830" y="329" font-size="11" fill="#991b1b">✓ Within position limits</text>
+                <text x="830" y="346" font-size="11" fill="#991b1b">✓ Risk parameters OK</text>
+                <text x="830" y="363" font-size="11" fill="#991b1b">✓ Market hours check</text>
+                
+                <!-- Exit Conditions -->
+                <rect x="820" y="380" width="310" height="100" fill="#fef2f2" stroke="#ef4444" stroke-width="1" rx="8"/>
+                <text x="975" y="405" font-size="13" font-weight="bold" text-anchor="middle" fill="#991b1b">
+                    Exit Conditions (ANY triggers exit)
+                </text>
+                <text x="830" y="425" font-size="11" fill="#991b1b">• Target reached (1-2%)</text>
+                <text x="830" y="442" font-size="11" fill="#991b1b">• Stop loss hit (0.5-1%)</text>
+                <text x="830" y="459" font-size="11" fill="#991b1b">• Rating drops below 2.5</text>
+                <text x="830" y="476" font-size="11" fill="#991b1b">• End of day (3:15 PM)</text>
+                
+                <!-- Order Execution -->
+                <rect x="820" y="490" width="310" height="60" fill="#dcfce7" stroke="#22c55e" stroke-width="2" rx="8"/>
+                <text x="975" y="515" font-size="13" font-weight="bold" text-anchor="middle" fill="#14532d">
+                    Order Execution (Kite API)
+                </text>
+                <text x="975" y="535" font-size="11" text-anchor="middle" fill="#14532d">
+                    MARKET orders for immediate execution
+                </text>
+                
+                <!-- Position Management -->
+                <rect x="50" y="400" width="230" height="180" fill="#e0e7ff" stroke="#6366f1" stroke-width="2" rx="10"/>
+                <text x="165" y="430" font-size="14" font-weight="bold" text-anchor="middle" fill="#312e81">
+                    Position Management
+                </text>
+                
+                <text x="65" y="455" font-size="11" fill="#312e81">• Track open positions</text>
+                <text x="65" y="475" font-size="11" fill="#312e81">• Monitor P&L real-time</text>
+                <text x="65" y="495" font-size="11" fill="#312e81">• Adjust stop loss (trailing)</text>
+                <text x="65" y="515" font-size="11" fill="#312e81">• Position sizing (capital/20)</text>
+                <text x="65" y="535" font-size="11" fill="#312e81">• Max 5 concurrent positions</text>
+                <text x="65" y="555" font-size="11" fill="#312e81">• Auto-square off at 3:15 PM</text>
+                
+                <!-- Feedback Loop -->
+                <path d="M 975 550 L 975 620 L 520 620 L 520 600" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+                <text x="750" y="615" font-size="11" text-anchor="middle" fill="#22c55e">Position feedback</text>
+                
+                <!-- Market Hours indicator -->
+                <rect x="480" y="720" width="240" height="40" fill="#fbbf24" rx="20"/>
+                <text x="600" y="745" font-size="14" font-weight="bold" text-anchor="middle" fill="white">
+                    ⏰ Active: 9:15 AM - 3:30 PM
+                </text>
+            </svg>
+            
+            <div class="flow-description">
+                <h3>Live Trading Details</h3>
+                <ul>
+                    <li><span class="highlight">Data Frequency:</span> Processes 1-3 ticks per second per stock (20 stocks × 2 ticks/sec = 40 ticks/sec total)</li>
+                    <li><span class="highlight">Latency:</span> Rating updates in &lt;100ms, order execution in &lt;500ms</li>
+                    <li><span class="highlight">Risk Management:</span> Maximum 5% portfolio risk, individual position risk 0.5-1%</li>
+                    <li><span class="highlight">Performance:</span> Hybrid model reduces computation by 70% vs full recalculation</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 4. Data Flow Architecture -->
+        <div class="diagram-section">
+            <h2><span class="icon">4</span>Data Flow & State Management</h2>
+            <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background -->
+                <rect width="1200" height="600" fill="#f8f9fa"/>
+                
+                <!-- Title -->
+                <text x="600" y="30" font-size="20" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                    System Data Flow & State Management
+                </text>
+                
+                <!-- Data Sources -->
+                <g id="data-sources">
+                    <rect x="50" y="80" width="200" height="300" fill="#e6f3ff" stroke="#4a90e2" stroke-width="2" rx="10"/>
+                    <text x="150" y="110" font-size="14" font-weight="bold" text-anchor="middle" fill="#1e3a8a">
+                        Data Sources
+                    </text>
+                    
+                    <rect x="70" y="130" width="160" height="40" fill="#dbeafe" rx="5"/>
+                    <text x="150" y="155" font-size="12" text-anchor="middle" fill="#1e3a8a">
+                        Kite Historical API
+                    </text>
+                    
+                    <rect x="70" y="180" width="160" height="40" fill="#dbeafe" rx="5"/>
+                    <text x="150" y="205" font-size="12" text-anchor="middle" fill="#1e3a8a">
+                        WebSocket (Live)
+                    </text>
+                    
+                    <rect x="70" y="230" width="160" height="40" fill="#dbeafe" rx="5"/>
+                    <text x="150" y="255" font-size="12" text-anchor="middle" fill="#1e3a8a">
+                        Local JSON Files
+                    </text>
+                    
+                    <rect x="70" y="280" width="160" height="40" fill="#dbeafe" rx="5"/>
+                    <text x="150" y="305" font-size="12" text-anchor="middle" fill="#1e3a8a">
+                        Watchlist Config
+                    </text>
+                    
+                    <rect x="70" y="330" width="160" height="40" fill="#dbeafe" rx="5"/>
+                    <text x="150" y="355" font-size="12" text-anchor="middle" fill="#1e3a8a">
+                        User Dashboard
+                    </text>
+                </g>
+                
+                <!-- Processing Layer -->
+                <g id="processing">
+                    <rect x="320" y="80" width="560" height="300" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="10"/>
+                    <text x="600" y="110" font-size="14" font-weight="bold" text-anchor="middle" fill="#92400e">
+                        Processing & Computation Layer
+                    </text>
+                    
+                    <!-- Components -->
+                    <rect x="340" y="130" width="240" height="50" fill="#fed7aa" rx="5"/>
+                    <text x="460" y="160" font-size="12" text-anchor="middle" fill="#7c2d12">
+                        Indicator Calculator
+                    </text>
+                    
+                    <rect x="620" y="130" width="240" height="50" fill="#fed7aa" rx="5"/>
+                    <text x="740" y="160" font-size="12" text-anchor="middle" fill="#7c2d12">
+                        Rating Systems (W/L)
+                    </text>
+                    
+                    <rect x="340" y="200" width="240" height="50" fill="#fed7aa" rx="5"/>
+                    <text x="460" y="230" font-size="12" text-anchor="middle" fill="#7c2d12">
+                        Strategy Engine
+                    </text>
+                    
+                    <rect x="620" y="200" width="240" height="50" fill="#fed7aa" rx="5"/>
+                    <text x="740" y="230" font-size="12" text-anchor="middle" fill="#7c2d12">
+                        Position Manager
+                    </text>
+                    
+                    <rect x="480" y="270" width="240" height="50" fill="#fed7aa" rx="5"/>
+                    <text x="600" y="300" font-size="12" text-anchor="middle" fill="#7c2d12">
+                        Risk Controller
+                    </text>
+                </g>
+                
+                <!-- State Storage -->
+                <g id="state">
+                    <rect x="950" y="80" width="200" height="300" fill="#e6ffe6" stroke="#4ae24a" stroke-width="2" rx="10"/>
+                    <text x="1050" y="110" font-size="14" font-weight="bold" text-anchor="middle" fill="#14532d">
+                        State Persistence
+                    </text>
+                    
+                    <rect x="970" y="130" width="160" height="40" fill="#dcfce7" rx="5"/>
+                    <text x="1050" y="155" font-size="12" text-anchor="middle" fill="#14532d">
+                        bot_state.json
+                    </text>
+                    
+                    <rect x="970" y="180" width="160" height="40" fill="#dcfce7" rx="5"/>
+                    <text x="1050" y="205" font-size="12" text-anchor="middle" fill="#14532d">
+                        positions.json
+                    </text>
+                    
+                    <rect x="970" y="230" width="160" height="40" fill="#dcfce7" rx="5"/>
+                    <text x="1050" y="255" font-size="12" text-anchor="middle" fill="#14532d">
+                        top_stocks.json
+                    </text>
+                    
+                    <rect x="970" y="280" width="160" height="40" fill="#dcfce7" rx="5"/>
+                    <text x="1050" y="305" font-size="12" text-anchor="middle" fill="#14532d">
+                        live_ratings.json
+                    </text>
+                    
+                    <rect x="970" y="330" width="160" height="40" fill="#dcfce7" rx="5"/>
+                    <text x="1050" y="355" font-size="12" text-anchor="middle" fill="#14532d">
+                        trade_history.json
+                    </text>
+                </g>
+                
+                <!-- Memory Management -->
+                <rect x="320" y="420" width="560" height="120" fill="#ffe4e6" stroke="#ef4444" stroke-width="2" rx="10"/>
+                <text x="600" y="450" font-size="14" font-weight="bold" text-anchor="middle" fill="#991b1b">
+                    Memory Management & Optimization
+                </text>
+                
+                <text x="340" y="475" font-size="12" fill="#991b1b">• Limited candle history: 1min(500), 3min(300), 5min(200)</text>
+                <text x="340" y="500" font-size="12" fill="#991b1b">• Incremental calculations for live indicators</text>
+                <text x="340" y="525" font-size="12" fill="#991b1b">• Graceful deprecation of old rating systems</text>
+                
+                <!-- Arrows showing data flow -->
+                <path d="M 250 230 L 320 230" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                <path d="M 880 230 L 950 230" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                <path d="M 600 380 L 600 420" stroke="#4a5568" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                
+                <!-- Bidirectional arrows -->
+                <path d="M 880 300 L 950 300" stroke="#4a5568" stroke-width="2" fill="none"/>
+                <path d="M 950 320 L 880 320" stroke="#4a5568" stroke-width="2" fill="none"/>
+                <text x="915" y="295" font-size="10" text-anchor="middle" fill="#4a5568">Read</text>
+                <text x="915" y="335" font-size="10" text-anchor="middle" fill="#4a5568">Write</text>
+            </svg>
+            
+            <div class="flow-description">
+                <h3>Data Management Strategy</h3>
+                <ul>
+                    <li><span class="highlight">Historical Data:</span> Stored locally in JSON files, organized by symbol and timeframe</li>
+                    <li><span class="highlight">Live Data:</span> WebSocket streams processed in-memory with minimal persistence</li>
+                    <li><span class="highlight">State Recovery:</span> Complete system state saved every minute for crash recovery</li>
+                    <li><span class="highlight">Memory Optimization:</span> Rolling windows, incremental calculations, automatic cleanup</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 5. System Integration -->
+        <div class="diagram-section">
+            <h2><span class="icon">5</span>Complete System Integration</h2>
+            <svg viewBox="0 0 1200 500" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background -->
+                <rect width="1200" height="500" fill="#f8f9fa"/>
+                
+                <!-- Title -->
+                <text x="600" y="30" font-size="20" font-weight="bold" text-anchor="middle" fill="#2d3748">
+                    End-to-End System Integration
+                </text>
+                
+                <!-- Timeline -->
+                <line x1="100" y1="450" x2="1100" y2="450" stroke="#4a5568" stroke-width="2"/>
+                
+                <!-- Time markers -->
+                <text x="100" y="470" font-size="11" text-anchor="middle" fill="#4a5568">9:00 AM</text>
+                <text x="300" y="470" font-size="11" text-anchor="middle" fill="#4a5568">9:15 AM</text>
+                <text x="600" y="470" font-size="11" text-anchor="middle" fill="#4a5568">12:30 PM</text>
+                <text x="900" y="470" font-size="11" text-anchor="middle" fill="#4a5568">3:15 PM</text>
+                <text x="1100" y="470" font-size="11" text-anchor="middle" fill="#4a5568">3:30 PM</text>
+                
+                <!-- Pre-market -->
+                <rect x="50" y="320" width="200" height="100" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="10"/>
+                <text x="150" y="350" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e3a8a">
+                    Pre-Market Setup
+                </text>
+                <text x="150" y="370" font-size="11" text-anchor="middle" fill="#1e3a8a">• Fetch historical data</text>
+                <text x="150" y="388" font-size="11" text-anchor="middle" fill="#1e3a8a">• Calculate ratings</text>
+                <text x="150" y="406" font-size="11" text-anchor="middle" fill="#1e3a8a">• Select top 20</text>
+                
+                <!-- Market open -->
+                <rect x="250" y="200" width="150" height="200" fill="#fee2e2" stroke="#dc2626" stroke-width="2" rx="10"/>
+                <text x="325" y="230" font-size="12" font-weight="bold" text-anchor="middle" fill="#991b1b">
+                    Market Opens
+                </text>
+                <text x="325" y="250" font-size="11" text-anchor="middle" fill="#991b1b">• Start WebSocket</text>
+                <text x="325" y="268" font-size="11" text-anchor="middle" fill="#991b1b">• Initialize live</text>
+                <text x="325" y="286" font-size="11" text-anchor="middle" fill="#991b1b">  rating systems</text>
+                <text x="325" y="304" font-size="11" text-anchor="middle" fill="#991b1b">• Begin monitoring</text>
+                
+                <rect x="275" y="330" width="100" height="40" fill="#fef3c7" rx="5"/>
+                <text x="325" y="355" font-size="11" text-anchor="middle" fill="#92400e">
+                    Universe Update
+                </text>
+                
+                <!-- Active trading -->
+                <rect x="450" y="100" width="350" height="300" fill="#dcfce7" stroke="#22c55e" stroke-width="2" rx="10"/>
+                <text x="625" y="130" font-size="14" font-weight="bold" text-anchor="middle" fill="#14532d">
+                    Active Trading Hours
+                </text>
+                
+                <text x="625" y="160" font-size="12" text-anchor="middle" fill="#14532d">Continuous Operations:</text>
+                <text x="470" y="185" font-size="11" fill="#14532d">✓ Process live ticks (40/sec)</text>
+                <text x="470" y="205" font-size="11" fill="#14532d">✓ Update ratings real-time</text>
+                <text x="470" y="225" font-size="11" fill="#14532d">✓ Execute trades on signals</text>
+                <text x="470" y="245" font-size="11" fill="#14532d">✓ Manage positions</text>
+                <text x="470" y="265" font-size="11" fill="#14532d">✓ Monitor P&L</text>
+                
+                <text x="625" y="295" font-size="12" text-anchor="middle" fill="#14532d">Periodic Tasks:</text>
+                <text x="470" y="320" font-size="11" fill="#14532d">• Strategic update (10 min)</text>
+                <text x="470" y="340" font-size="11" fill="#14532d">• Universe refresh (30 min)</text>
+                <text x="470" y="360" font-size="11" fill="#14532d">• State backup (1 min)</text>
+                <text x="470" y="380" font-size="11" fill="#14532d">• Dashboard update (real-time)</text>
+                
+                <!-- Square off -->
+                <rect x="850" y="250" width="150" height="150" fill="#fef2f2" stroke="#ef4444" stroke-width="2" rx="10"/>
+                <text x="925" y="280" font-size="12" font-weight="bold" text-anchor="middle" fill="#991b1b">
+                    Day End
+                </text>
+                <text x="925" y="300" font-size="11" text-anchor="middle" fill="#991b1b">• Square off all</text>
+                <text x="925" y="318" font-size="11" text-anchor="middle" fill="#991b1b">• Calculate daily P&L</text>
+                <text x="925" y="336" font-size="11" text-anchor="middle" fill="#991b1b">• Save trade history</text>
+                <text x="925" y="354" font-size="11" text-anchor="middle" fill="#991b1b">• Generate reports</text>
+                <text x="925" y="372" font-size="11" text-anchor="middle" fill="#991b1b">• Cleanup memory</text>
+                
+                <!-- Market close -->
+                <rect x="1050" y="320" width="120" height="100" fill="#e0e7ff" stroke="#6366f1" stroke-width="2" rx="10"/>
+                <text x="1110" y="350" font-size="12" font-weight="bold" text-anchor="middle" fill="#312e81">
+                    Post-Market
+                </text>
+                <text x="1110" y="370" font-size="11" text-anchor="middle" fill="#312e81">• Stop services</text>
+                <text x="1110" y="388" font-size="11" text-anchor="middle" fill="#312e81">• Final backup</text>
+                <text x="1110" y="406" font-size="11" text-anchor="middle" fill="#312e81">• Shutdown</text>
+                
+                <!-- Arrows showing progression -->
+                <path d="M 150 320 L 150 80 L 625 80 L 625 100" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+                <text x="400" y="75" font-size="11" text-anchor="middle" fill="#22c55e">Continuous monitoring</text>
+            </svg>
+            
+            <div class="flow-description">
+                <h3>Daily Operation Summary</h3>
+                <ul>
+                    <li><span class="highlight">9:00-9:15 AM:</span> Pre-market preparation, data fetch, stock selection</li>
+                    <li><span class="highlight">9:15 AM:</span> Market opens, WebSocket starts, live monitoring begins</li>
+                    <li><span class="highlight">9:15 AM-3:15 PM:</span> Active trading with real-time rating updates and position management</li>
+                    <li><span class="highlight">3:15 PM:</span> Square off all positions, calculate P&L</li>
+                    <li><span class="highlight">3:30 PM:</span> Market closes, system shutdown</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4a90e2;"></div>
+                <span>Pre-Market/Setup</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e24a4a;"></div>
+                <span>Live Trading</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4ae24a;"></div>
+                <span>Monitoring/Control</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f59e0b;"></div>
+                <span>Processing/Calculation</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #6366f1;"></div>
+                <span>State/Storage</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
